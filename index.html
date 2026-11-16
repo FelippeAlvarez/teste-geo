@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teste — Registro de Local e Hora</title>
+<style>
+  :root { --cor: #1f5fbf; --borda: #d0d7e2; --fundo: #f5f7fb; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--fundo); color: #1b2330; }
+  main { max-width: 640px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.25rem; margin: 0 0 4px; }
+  h2 { font-size: 1.05rem; margin: 0 0 8px; }
+  .sub { color: #5a6678; font-size: .85rem; margin-bottom: 14px; }
+  .card { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  label { display: block; font-size: .85rem; margin: 8px 0 3px; color: #3a4658; }
+  input[type=text], input[type=number], select, textarea { width: 100%; padding: 9px; border: 1px solid var(--borda); border-radius: 8px; font: inherit; }
+  button { font: inherit; border: 0; border-radius: 8px; padding: 10px 14px; background: var(--cor); color: #fff; cursor: pointer; }
+  button.sec { background: #e8edf6; color: #1b2330; }
+  button.perigo { background: #f6e3e3; color: #8a1f1f; }
+  button:disabled { opacity: .5; cursor: default; }
+  .grande { width: 100%; font-size: 1.05rem; padding: 14px; }
+  .linha { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .status { margin-top: 10px; font-size: .9rem; color: #3a4658; min-height: 1.3em; }
+  .erro { color: #8a1f1f; }
+  .aviso { background: #fff6e0; border: 1px solid #f0d58a; border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: .85rem; }
+  dl { margin: 0; display: grid; grid-template-columns: 8.5rem 1fr; gap: 4px 8px; font-size: .88rem; }
+  dt { color: #5a6678; } dd { margin: 0; word-break: break-word; }
+  .item { border-top: 1px solid var(--borda); padding-top: 10px; margin-top: 10px; }
+  pre { white-space: pre-wrap; font-size: .8rem; background: #f0f3f9; padding: 8px; border-radius: 8px; margin: 6px 0 0; }
+  small { color: #5a6678; }
+  details summary { cursor: pointer; font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Registro de Local e Hora — página de teste</h1>
+  <div class="sub">Motor GeoRegistro <span id="versao"></span> · esta página só serve para testar o motor. Cada app usará o próprio visual.</div>
+
+  <div class="card">
+    <h2>Condições deste aparelho</h2>
+    <div id="diag" class="status"></div>
+  </div>
+
+  <div class="card">
+    <h2>Registrar</h2>
+    <label for="tipo">Tipo de registro</label>
+    <select id="tipo">
+      <option value="vistoria">Vistoria</option>
+      <option value="visita comercial">Visita comercial</option>
+      <option value="teste">Teste</option>
+    </select>
+    <div class="aviso" id="aviso"></div>
+    <div class="linha"><button class="grande" id="btnRegistrar">📍 Registrar local e hora</button></div>
+    <div class="status" id="status"></div>
+
+    <div id="resultado" hidden>
+      <hr style="border:0;border-top:1px solid var(--borda);margin:12px 0">
+      <dl id="dados"></dl>
+      <label for="obs">Observação (campo livre)</label>
+      <textarea id="obs" rows="2" placeholder="Ex.: nome do cliente, unidade vistoriada…"></textarea>
+      <div class="linha">
+        <button id="btnSalvar">Salvar registro</button>
+        <button class="sec" id="btnDescartar">Descartar</button>
+        <button class="sec" id="btnRepetir">Tentar de novo</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Ajustes de teste</h2>
+    <label for="limite">Limite de precisão (metros)</label>
+    <input type="number" id="limite" value="25" min="5" max="500">
+    <label><input type="checkbox" id="chkBdc"> Ativar BigDataCloud como 2º provedor (só localidade; termos ainda a verificar)</label>
+    <label><input type="checkbox" id="chkNom" checked> Ativar Nominatim (OpenStreetMap)</label>
+    <small>Para simular falha do 1º provedor e ver a troca automática, desmarque o Nominatim e marque o BigDataCloud.</small>
+  </div>
+
+  <div class="card">
+    <h2>Registros salvos neste aparelho</h2>
+    <div class="linha" style="margin-top:0">
+      <button class="sec" id="btnExportar">Exportar JSON</button>
+      <button class="sec" id="btnPendentes">Completar endereços pendentes</button>
+      <button class="sec" id="btnAtualizar">Atualizar lista</button>
+    </div>
+    <div id="lista"></div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>Créditos, licenças, versão e manual</summary>
+      <div id="creditos" style="margin-top:8px;font-size:.88rem"></div>
+    </details>
+  </div>
+</main>
+
+<script>
+/*!
+ * GeoRegistro — motor de registro de local (GPS), endereço e horário
+ * Versão 1.0.1
+ * Copyright © 2026 Felippe Alvarez. Todos os direitos reservados.
+ * (Licença de distribuição a terceiros: PENDENTE de definição.)
+ *
+ * O QUE É
+ *   Motor SEM interface visual, para ser copiado para dentro de cada app.
+ *   O app cria os botões e telas no próprio visual e chama as funções abaixo.
+ *   Sem dependências externas. Funciona em página HTTPS (ex.: GitHub Pages).
+ *
+ * USO BÁSICO (dentro do app)
+ *   1) Opcional, uma vez, ao iniciar o app:
+ *        GeoRegistro.configurar({ appId: 'vistoria' });
+ *      >>> appId é OBRIGATÓRIO na prática: todos os apps em felippealvarez.github.io
+ *      >>> compartilham o mesmo armazenamento do navegador. O appId separa os dados.
+ *
+ *   2) Quando a pessoa tocar no botão "Registrar local e hora":
+ *        const rascunho = await GeoRegistro.capturar({
+ *          tipo: 'vistoria',                       // texto livre definido pelo app
+ *          onStatus: (s) => mostrarNaTela(s)       // opcional: andamento
+ *        });
+ *      Mostre ao usuário: rascunho.endereco.texto, rascunho.localizacao.precisaoM,
+ *      rascunho.horario.dispositivoISO etc. Nada foi gravado ainda.
+ *
+ *   3) Quando a pessoa confirmar:
+ *        const registro = await GeoRegistro.salvar(rascunho, { observacao: 'texto livre' });
+ *
+ *   4) Outras funções:
+ *        GeoRegistro.listar({ tipo })             -> registros salvos (mais recentes primeiro)
+ *        GeoRegistro.obter(id) / excluir(id)
+ *        GeoRegistro.verificarIntegridade(reg)    -> confere se o registro foi alterado
+ *        GeoRegistro.completarEnderecosPendentes()-> busca endereço dos registros feitos sem internet
+ *        GeoRegistro.exportarJSON(registros?) / baixarJSON({registros?, nomeArquivo?})
+ *        GeoRegistro.textoResumo(reg)             -> texto pronto para copiar/compartilhar
+ *        GeoRegistro.linkMapa(reg, 'google'|'osm')
+ *        GeoRegistro.creditos()                   -> dados para a tela de créditos/licenças/versão
+ *        GeoRegistro.textos                       -> aviso, manual curto, privacidade-base, limitações
+ *        GeoRegistro.diagnostico()                -> o que o aparelho/navegador permite
+ *        GeoRegistro.estadoPermissao()            -> 'granted' | 'prompt' | 'denied' | 'desconhecido'
+ *
+ * ERROS
+ *   As funções que falham lançam um Error com .codigo e .message em português:
+ *   PERMISSAO_NEGADA, SEM_GPS, INSEGURO, ORIGEM_INVALIDA, TEMPO_ESGOTADO, POSICAO_INDISPONIVEL, REGISTRO_INVALIDO.
+ *
+ * LIMITES (leia GeoRegistro.textos.limitacoes)
+ *   Registro feito só no aparelho é declaração do usuário com indícios técnicos,
+ *   não prova robusta: relógio e GPS do aparelho podem ser alterados.
+ */
+(function (global) {
+  'use strict';
+
+  var VERSAO = '1.0.1';
+  var ESQUEMA = 1;
+
+  // ---------------------------------------------------------------- configuração
+  var CFG = {
+    appId: 'app',
+    limitePrecisaoM: 25,            // acima disto o registro sai marcado "precisão baixa"
+    tempoMaxMs: 25000,              // tempo máximo esperando o GPS melhorar
+    limiteDiferencaRelogioSeg: 120, // acima disto: alerta de relógio divergente
+    timeoutProvedorMs: 6000,        // tempo máximo por consulta externa
+    contatoNominatim: '',           // e-mail opcional de contato (boa prática da política do Nominatim)
+    ordemEndereco: ['nominatim', 'bigdatacloud', 'locationiq'],
+    provedores: {
+      nominatim:    { ativo: true },
+      // Sem chave e sem cadastro, mas só informa localidade (sem rua).
+      // DESLIGADO por padrão até conferirmos os termos de uso.
+      bigdatacloud: { ativo: false },
+      // Gratuito com cadastro (sem cartão, a confirmar). Precisa de chave restrita ao domínio.
+      locationiq:   { ativo: false, chave: '', regiao: 'us1' }
+    },
+    fontesHora: ['worldtimeapi', 'timeapi']
+  };
+
+  function mesclar(dest, orig) {
+    Object.keys(orig || {}).forEach(function (k) {
+      var v = orig[k];
+      if (v && typeof v === 'object' && !Array.isArray(v) && dest[k] && typeof dest[k] === 'object') {
+        mesclar(dest[k], v);
+      } else {
+        dest[k] = v;
+      }
+    });
+    return dest;
+  }
+
+  function configurar(opcoes) {
+    var appAntes = CFG.appId;
+    mesclar(CFG, opcoes || {});
+    if (CFG.appId !== appAntes) { Banco.reiniciar(); }
+    return JSON.parse(JSON.stringify(CFG));
+  }
+
+  // ---------------------------------------------------------------- utilidades
+  function erro(codigo, mensagem) {
+    var e = new Error(mensagem);
+    e.codigo = codigo;
+    return e;
+  }
+
+  function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  function comTimeout(url, opcoes, ms) {
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var t = setTimeout(function () { if (ctrl) ctrl.abort(); }, ms);
+    var o = {};
+    Object.keys(opcoes || {}).forEach(function (k) { o[k] = opcoes[k]; });
+    if (ctrl) o.signal = ctrl.signal;
+    return fetch(url, o).then(
+      function (r) { clearTimeout(t); return r; },
+      function (e) { clearTimeout(t); throw e; }
+    );
+  }
+
+  function pad(n, t) { n = String(n); while (n.length < (t || 2)) n = '0' + n; return n; }
+
+  function isoLocal(d) {
+    var off = -d.getTimezoneOffset();
+    var s = off >= 0 ? '+' : '-';
+    off = Math.abs(off);
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' +
+      pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + '.' + pad(d.getMilliseconds(), 3) +
+      s + pad(Math.floor(off / 60)) + ':' + pad(off % 60);
+  }
+
+  function novoId() {
+    if (global.crypto && typeof global.crypto.randomUUID === 'function') return global.crypto.randomUUID();
+    var a = new Uint8Array(16);
+    if (global.crypto && global.crypto.getRandomValues) global.crypto.getRandomValues(a);
+    else for (var i = 0; i < 16; i++) a[i] = Math.floor(Math.random() * 256);
+    return Array.prototype.map.call(a, function (b) { return pad(b.toString(16)); }).join('');
+  }
+
+  // JSON canônico (chaves ordenadas) para o hash ser sempre reproduzível
+  function canonico(v) {
+    if (v === null || v === undefined) return 'null';
+    if (typeof v !== 'object') return JSON.stringify(v);
+    if (Array.isArray(v)) return '[' + v.map(canonico).join(',') + ']';
+    return '{' + Object.keys(v).sort().filter(function (k) { return v[k] !== undefined; })
+      .map(function (k) { return JSON.stringify(k) + ':' + canonico(v[k]); }).join(',') + '}';
+  }
+
+  function sha256hex(texto) {
+    if (!(global.crypto && global.crypto.subtle)) return Promise.resolve(null);
+    return global.crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto)).then(function (buf) {
+      return Array.prototype.map.call(new Uint8Array(buf), function (b) { return pad(b.toString(16)); }).join('');
+    });
+  }
+
+  // ---------------------------------------------------------------- GPS
+  function obterPosicao(onStatus, limite, tempoMax) {
+    return new Promise(function (resolve, reject) {
+      var nav = global.navigator;
+      if (!nav || !('geolocation' in nav)) {
+        return reject(erro('SEM_GPS', 'Este aparelho ou navegador não oferece localização.'));
+      }
+      var proto = (global.location && global.location.protocol) || 'https:';
+      if (proto !== 'https:' && proto !== 'http:') {
+        return reject(erro('ORIGEM_INVALIDA', 'Esta página foi aberta como arquivo (por exemplo, recebida pelo WhatsApp ou aberta pelo gerenciador de arquivos). Nesse caso o navegador bloqueia a localização sem perguntar. Abra a página pelo endereço https do site publicado.'));
+      }
+      if (global.isSecureContext === false) {
+        return reject(erro('INSEGURO', 'A localização só funciona em página segura (https).'));
+      }
+      var melhor = null, ultimoErro = null, fim = false, wid = null, timer = null;
+
+      function parar() {
+        fim = true;
+        clearTimeout(timer);
+        if (wid !== null) { try { nav.geolocation.clearWatch(wid); } catch (e) { /* ignora */ } }
+      }
+      function concluir() {
+        if (fim) return;
+        parar();
+        if (melhor) return resolve(melhor);
+        if (ultimoErro && ultimoErro.code === 2) {
+          return reject(erro('POSICAO_INDISPONIVEL', 'Não foi possível determinar a posição. Verifique se o GPS/localização do aparelho está ligado.'));
+        }
+        reject(erro('TEMPO_ESGOTADO', 'O aparelho não conseguiu obter a localização a tempo. Vá para um local aberto e tente de novo.'));
+      }
+
+      wid = nav.geolocation.watchPosition(
+        function (p) {
+          if (fim) return;
+          var c = p.coords;
+          var amostra = {
+            lat: c.latitude, lon: c.longitude, acc: c.accuracy,
+            alt: (typeof c.altitude === 'number') ? c.altitude : null,
+            altAcc: (typeof c.altitudeAccuracy === 'number') ? c.altitudeAccuracy : null,
+            ts: p.timestamp
+          };
+          if (!melhor || amostra.acc < melhor.acc) melhor = amostra;
+          if (onStatus) onStatus({ etapa: 'localizando', precisaoM: Math.round(amostra.acc) });
+          if (amostra.acc <= limite) concluir();
+        },
+        function (e) {
+          if (fim) return;
+          if (e && e.code === 1) {
+            parar();
+            return reject(erro('PERMISSAO_NEGADA', 'A permissão de localização foi negada. Ative a localização para este site nas configurações do navegador e tente de novo.'));
+          }
+          ultimoErro = e;   // erros transitórios: continua esperando até o tempo máximo
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: tempoMax }
+      );
+      timer = setTimeout(concluir, tempoMax);
+    });
+  }
+
+  // ---------------------------------------------------------------- endereço
+  var ultimaChamada = {};
+  var cacheEnd = {};
+
+  function intervalo(nome, minMs) {
+    var espera = (ultimaChamada[nome] || 0) + minMs - Date.now();
+    return (espera > 0 ? esperar(espera) : Promise.resolve()).then(function () { ultimaChamada[nome] = Date.now(); });
+  }
+
+  function ufDe(a) {
+    var iso = a['ISO3166-2-lvl4'] || a['ISO3166-2-lvl3'] || '';
+    if (/^BR-[A-Z]{2}$/.test(iso)) return iso.slice(3);
+    return a.state || '';
+  }
+
+  // Monta "Rua X, 10, Bairro, Cidade - UF, CEP 00000-000" a partir de componentes no padrão OSM
+  function montarTexto(a) {
+    var rua = a.road || a.pedestrian || a.footway || a.path || a.cycleway || a.residential || a.square || '';
+    var num = a.house_number || '';
+    var bairro = a.suburb || a.neighbourhood || a.quarter || a.city_district || a.borough || '';
+    var cidade = a.city || a.town || a.village || a.municipality || a.county || '';
+    var uf = ufDe(a);
+    var partes = [];
+    if (rua) partes.push(num ? rua + ', ' + num : rua);
+    if (bairro) partes.push(bairro);
+    if (cidade) partes.push(uf ? cidade + ' - ' + uf : cidade);
+    else if (uf) partes.push(uf);
+    if (a.postcode) partes.push('CEP ' + a.postcode);
+    return { texto: partes.join(', '), aproximado: !rua };
+  }
+
+  function http(codigoBase, r) { return erro(codigoBase + '_' + r.status, 'Resposta ' + r.status + ' do provedor.'); }
+
+  var PROVEDORES = {
+    nominatim: {
+      atribuicao: { nome: 'OpenStreetMap / Nominatim', texto: '© OpenStreetMap contributors', url: 'https://www.openstreetmap.org/copyright' },
+      requerChave: false,
+      buscar: function (lat, lon) {
+        return intervalo('nominatim', 1100).then(function () {
+          var url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&accept-language=pt-BR' +
+            '&lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lon) +
+            (CFG.contatoNominatim ? '&email=' + encodeURIComponent(CFG.contatoNominatim) : '');
+          return comTimeout(url, { headers: { 'Accept': 'application/json' } }, CFG.timeoutProvedorMs);
+        }).then(function (r) {
+          if (!r.ok) throw http('HTTP', r);
+          return r.json();
+        }).then(function (d) {
+          if (!d || d.error || !d.address) throw erro('SEM_RESULTADO', 'Sem resultado.');
+          var m = montarTexto(d.address);
+          var texto = m.texto || d.display_name || '';
+          if (!texto) throw erro('SEM_RESULTADO', 'Sem resultado.');
+          return { texto: texto, aproximado: m.aproximado || !m.texto };
+        });
+      }
+    },
+
+    // ATENÇÃO: campos e termos de uso NÃO verificados em ambiente real. Só informa localidade.
+    bigdatacloud: {
+      atribuicao: { nome: 'BigDataCloud', texto: 'Reverse geocoding by BigDataCloud', url: 'https://www.bigdatacloud.com' },
+      requerChave: false,
+      buscar: function (lat, lon) {
+        var url = 'https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=pt&latitude=' +
+          encodeURIComponent(lat) + '&longitude=' + encodeURIComponent(lon);
+        return comTimeout(url, {}, CFG.timeoutProvedorMs).then(function (r) {
+          if (!r.ok) throw http('HTTP', r);
+          return r.json();
+        }).then(function (d) {
+          var partes = [];
+          var local = d.locality || '';
+          var cidade = d.city || '';
+          var uf = d.principalSubdivision || '';
+          if (local) partes.push(local);
+          if (cidade && cidade !== local) partes.push(uf ? cidade + ' - ' + uf : cidade);
+          else if (uf) partes.push(uf);
+          if (d.postcode) partes.push('CEP ' + d.postcode);
+          if (!partes.length) throw erro('SEM_RESULTADO', 'Sem resultado.');
+          return { texto: partes.join(', '), aproximado: true };
+        });
+      }
+    },
+
+    locationiq: {
+      atribuicao: { nome: 'LocationIQ / OpenStreetMap', texto: 'Search by LocationIQ.com · © OpenStreetMap contributors', url: 'https://locationiq.com' },
+      requerChave: true,
+      buscar: function (lat, lon, pc) {
+        var url = 'https://' + (pc.regiao || 'us1') + '.locationiq.com/v1/reverse?format=json&addressdetails=1&accept-language=pt-BR' +
+          '&key=' + encodeURIComponent(pc.chave) + '&lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lon);
+        return intervalo('locationiq', 600).then(function () {
+          return comTimeout(url, {}, CFG.timeoutProvedorMs);
+        }).then(function (r) {
+          if (!r.ok) throw http('HTTP', r);
+          return r.json();
+        }).then(function (d) {
+          if (!d || d.error || !d.address) throw erro('SEM_RESULTADO', 'Sem resultado.');
+          var m = montarTexto(d.address);
+          var texto = m.texto || d.display_name || '';
+          if (!texto) throw erro('SEM_RESULTADO', 'Sem resultado.');
+          return { texto: texto, aproximado: m.aproximado || !m.texto };
+        });
+      }
+    }
+  };
+
+  // Tenta cada provedor ativo, na ordem; passa ao seguinte em caso de erro, limite excedido ou resposta vazia.
+  function resolverEndereco(lat, lon) {
+    var chave = lat.toFixed(4) + ',' + lon.toFixed(4);
+    if (cacheEnd[chave]) {
+      var c = cacheEnd[chave];
+      return Promise.resolve({ texto: c.texto, aproximado: c.aproximado, provedor: c.provedor, pendente: false,
+        tentativas: [{ provedor: c.provedor, ok: true, cache: true }] });
+    }
+    var nav = global.navigator;
+    if (nav && nav.onLine === false) {
+      return Promise.resolve({ texto: null, aproximado: null, provedor: null, pendente: true,
+        tentativas: [{ provedor: '-', ok: false, erro: 'SEM_INTERNET' }] });
+    }
+    var tentativas = [];
+    var fila = CFG.ordemEndereco.slice();
+
+    function proximo() {
+      if (!fila.length) {
+        return Promise.resolve({ texto: null, aproximado: null, provedor: null, pendente: true, tentativas: tentativas });
+      }
+      var nome = fila.shift();
+      var pc = CFG.provedores[nome];
+      var impl = PROVEDORES[nome];
+      if (!pc || !pc.ativo || !impl) return proximo();
+      if (impl.requerChave && !pc.chave) {
+        tentativas.push({ provedor: nome, ok: false, erro: 'SEM_CHAVE' });
+        return proximo();
+      }
+      return impl.buscar(lat, lon, pc).then(function (r) {
+        tentativas.push({ provedor: nome, ok: true });
+        cacheEnd[chave] = { texto: r.texto, aproximado: r.aproximado, provedor: nome };
+        return { texto: r.texto, aproximado: r.aproximado, provedor: nome, pendente: false, tentativas: tentativas };
+      }, function (e) {
+        tentativas.push({ provedor: nome, ok: false, erro: (e && (e.codigo || e.name)) || 'ERRO' });
+        return proximo();
+      });
+    }
+    return proximo();
+  }
+
+  // ---------------------------------------------------------------- hora de referência (internet)
+  var FONTES_HORA = {
+    worldtimeapi: function () {
+      return comTimeout('https://worldtimeapi.org/api/timezone/Etc/UTC', {}, CFG.timeoutProvedorMs).then(function (r) {
+        if (!r.ok) throw http('HTTP', r);
+        return r.json();
+      }).then(function (d) {
+        var ms = d.utc_datetime ? Date.parse(String(d.utc_datetime).replace(/(\.\d{3})\d+/, '$1')) : NaN;
+        if (isNaN(ms) && typeof d.unixtime === 'number') ms = d.unixtime * 1000;
+        if (isNaN(ms)) throw erro('SEM_RESULTADO', 'Sem hora.');
+        return ms;
+      });
+    },
+    timeapi: function () {
+      return comTimeout('https://timeapi.io/api/time/current/zone?timeZone=UTC', {}, CFG.timeoutProvedorMs).then(function (r) {
+        if (!r.ok) throw http('HTTP', r);
+        return r.json();
+      }).then(function (d) {
+        var ms = d.dateTime ? Date.parse(String(d.dateTime).replace(/(\.\d{3})\d+/, '$1') + 'Z') : NaN;
+        if (isNaN(ms)) throw erro('SEM_RESULTADO', 'Sem hora.');
+        return ms;
+      });
+    }
+  };
+
+  function obterHoraReferencia() {
+    var nav = global.navigator;
+    if (nav && nav.onLine === false) return Promise.resolve(null);
+    var fila = CFG.fontesHora.slice();
+    function proximo() {
+      if (!fila.length) return Promise.resolve(null);
+      var nome = fila.shift();
+      var fn = FONTES_HORA[nome];
+      if (!fn) return proximo();
+      var t0 = Date.now();
+      return fn().then(function (srv) {
+        var t1 = Date.now();
+        var meio = (t0 + t1) / 2;
+        return {
+          fonte: nome,
+          epochMs: Math.round(srv),
+          isoUTC: new Date(srv).toISOString(),
+          latenciaMs: t1 - t0,
+          diferencaSeg: Math.round(((meio - srv) / 1000) * 10) / 10   // positivo = relógio do aparelho adiantado
+        };
+      }, function () { return proximo(); });
+    }
+    return proximo();
+  }
+
+  // ---------------------------------------------------------------- hash e integridade
+  function nucleo(reg) {
+    return {
+      id: reg.id, versaoEsquema: reg.versaoEsquema, versaoModulo: reg.versaoModulo, appId: reg.appId,
+      tipo: reg.tipo, observacao: reg.observacao, localizacao: reg.localizacao, horario: reg.horario, aparelho: reg.aparelho
+    };
+  }
+  function parteEndereco(reg) {
+    var e = reg.endereco || {};
+    return { texto: e.texto || null, provedor: e.provedor || null, posterior: !!e.posterior };
+  }
+  function hashNucleo(reg) { return sha256hex(canonico(nucleo(reg))); }
+  function hashCompleto(reg, hn) { return sha256hex(canonico({ nucleo: hn, endereco: parteEndereco(reg) })); }
+
+  function calcularHashes(reg) {
+    return hashNucleo(reg).then(function (hn) {
+      if (hn === null) return { algoritmo: 'SHA-256', nucleo: null, completo: null, indisponivel: true };
+      return hashCompleto(reg, hn).then(function (hc) {
+        return { algoritmo: 'SHA-256', nucleo: hn, completo: hc };
+      });
+    });
+  }
+
+  function verificarIntegridade(reg) {
+    if (!reg || !reg.hash || !reg.hash.nucleo) {
+      return Promise.resolve({ ok: false, motivo: 'SEM_HASH', nucleoOk: false, completoOk: false });
+    }
+    return hashNucleo(reg).then(function (hn) {
+      var nucleoOk = hn === reg.hash.nucleo;
+      return hashCompleto(reg, reg.hash.nucleo).then(function (hc) {
+        var completoOk = hc === reg.hash.completo;
+        return { ok: nucleoOk && completoOk, nucleoOk: nucleoOk, completoOk: completoOk,
+          motivo: nucleoOk ? (completoOk ? null : 'ENDERECO_ALTERADO') : 'DADOS_ALTERADOS' };
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------- armazenamento local
+  var Banco = (function () {
+    var dbp = null;
+    var memoria = [];
+    var modo = 'indexeddb';
+
+    function nome() { return 'geo-registro-' + CFG.appId; }
+
+    function abrir() {
+      if (dbp) return dbp;
+      dbp = new Promise(function (resolve) {
+        if (!global.indexedDB) { modo = 'memoria'; return resolve(null); }
+        var rq;
+        try { rq = global.indexedDB.open(nome(), 1); } catch (e) { modo = 'memoria'; return resolve(null); }
+        rq.onupgradeneeded = function () {
+          var d = rq.result;
+          if (!d.objectStoreNames.contains('registros')) {
+            var s = d.createObjectStore('registros', { keyPath: 'id' });
+            s.createIndex('tipo', 'tipo');
+          }
+        };
+        rq.onsuccess = function () { modo = 'indexeddb'; resolve(rq.result); };
+        rq.onerror = function () { modo = 'memoria'; resolve(null); };
+        rq.onblocked = function () { modo = 'memoria'; resolve(null); };
+      });
+      return dbp;
+    }
+
+    function transacao(tipo, fn) {
+      return abrir().then(function (db) {
+        if (!db) return fn(null);
+        return new Promise(function (resolve, reject) {
+          var tx = db.transaction('registros', tipo);
+          var st = tx.objectStore('registros');
+          var rq = fn(st);
+          tx.oncomplete = function () { resolve(rq && 'result' in rq ? rq.result : undefined); };
+          tx.onerror = function () { reject(erro('ARMAZENAMENTO', 'Falha ao acessar o armazenamento local.')); };
+          tx.onabort = tx.onerror;
+        });
+      });
+    }
+
+    function clonar(o) { return JSON.parse(JSON.stringify(o)); }
+
+    return {
+      modo: function () { return modo; },
+      reiniciar: function () { dbp = null; },
+      put: function (reg) {
+        return abrir().then(function (db) {
+          if (!db) {
+            memoria = memoria.filter(function (r) { return r.id !== reg.id; });
+            memoria.push(clonar(reg));
+            return;
+          }
+          return transacao('readwrite', function (st) { return st.put(clonar(reg)); });
+        });
+      },
+      get: function (id) {
+        return abrir().then(function (db) {
+          if (!db) { var r = memoria.filter(function (x) { return x.id === id; })[0]; return r ? clonar(r) : null; }
+          return transacao('readonly', function (st) { return st.get(id); }).then(function (r) { return r || null; });
+        });
+      },
+      todos: function () {
+        return abrir().then(function (db) {
+          if (!db) return clonar(memoria);
+          return transacao('readonly', function (st) { return st.getAll(); });
+        });
+      },
+      apagar: function (id) {
+        return abrir().then(function (db) {
+          if (!db) { memoria = memoria.filter(function (r) { return r.id !== id; }); return; }
+          return transacao('readwrite', function (st) { return st.delete(id); });
+        });
+      }
+    };
+  })();
+
+  // ---------------------------------------------------------------- operações principais
+  function capturar(op) {
+    op = op || {};
+    function st(o) { try { if (op.onStatus) op.onStatus(o); } catch (e) { /* ignora erro do app */ } }
+    var limite = op.limitePrecisaoM || CFG.limitePrecisaoM;
+    var tempoMax = op.tempoMaxMs || CFG.tempoMaxMs;
+    st({ etapa: 'solicitando_localizacao' });
+
+    return obterPosicao(st, limite, tempoMax).then(function (p) {
+      var instante = new Date();
+      st({ etapa: 'obtendo_endereco_e_hora', precisaoM: Math.round(p.acc) });
+      return Promise.all([resolverEndereco(p.lat, p.lon), obterHoraReferencia()]).then(function (res) {
+        var end = res[0], ref = res[1];
+        var nav = global.navigator || {};
+        var fuso = '';
+        try { fuso = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* ignora */ }
+        var dif = ref ? ref.diferencaSeg : null;
+        var rascunho = {
+          id: novoId(),
+          versaoEsquema: ESQUEMA,
+          versaoModulo: VERSAO,
+          appId: CFG.appId,
+          tipo: op.tipo || 'registro',
+          observacao: op.observacao || '',
+          localizacao: {
+            latitude: p.lat, longitude: p.lon, precisaoM: Math.round(p.acc * 10) / 10,
+            altitudeM: p.alt, altitudePrecisaoM: p.altAcc,
+            limitePrecisaoM: limite, precisaoBaixa: p.acc > limite
+          },
+          horario: {
+            dispositivoISO: isoLocal(instante),
+            dispositivoEpochMs: instante.getTime(),
+            fusoIANA: fuso,
+            fusoOffsetMin: -instante.getTimezoneOffset(),
+            referencia: ref,
+            diferencaSeg: dif,
+            limiteDiferencaSeg: CFG.limiteDiferencaRelogioSeg,
+            alertaRelogio: dif !== null && Math.abs(dif) > CFG.limiteDiferencaRelogioSeg,
+            referenciaConfirmada: !!ref
+          },
+          endereco: {
+            texto: end.texto, aproximado: end.aproximado, provedor: end.provedor,
+            pendente: end.pendente, posterior: false,
+            obtidoEm: end.texto ? isoLocal(new Date()) : null,
+            tentativas: end.tentativas
+          },
+          aparelho: {
+            userAgent: nav.userAgent || '', plataforma: nav.platform || '', idioma: nav.language || ''
+          },
+          hash: null,
+          salvoEm: null
+        };
+        st({ etapa: 'pronto' });
+        return rascunho;
+      });
+    });
+  }
+
+  function salvar(reg, extra) {
+    if (!reg || !reg.id || !reg.localizacao || !reg.horario) {
+      return Promise.reject(erro('REGISTRO_INVALIDO', 'Registro inválido.'));
+    }
+    if (extra && typeof extra.observacao === 'string') reg.observacao = extra.observacao;
+    return calcularHashes(reg).then(function (h) {
+      reg.hash = h;
+      reg.salvoEm = isoLocal(new Date());
+      return Banco.put(reg).then(function () { return reg; });
+    });
+  }
+
+  function listar(filtro) {
+    return Banco.todos().then(function (rs) {
+      rs = (rs || []).filter(function (r) { return !filtro || !filtro.tipo || r.tipo === filtro.tipo; });
+      rs.sort(function (a, b) { return b.horario.dispositivoEpochMs - a.horario.dispositivoEpochMs; });
+      return rs;
+    });
+  }
+
+  function obter(id) { return Banco.get(id); }
+  function excluir(id) { return Banco.apagar(id); }
+
+  // Completa o endereço dos registros feitos sem internet ou quando todos os provedores falharam.
+  function completarEnderecosPendentes() {
+    return listar().then(function (rs) {
+      var pend = rs.filter(function (r) { return r.endereco && !r.endereco.texto; });
+      var feitos = 0;
+      return pend.reduce(function (cadeia, reg) {
+        return cadeia.then(function () {
+          return resolverEndereco(reg.localizacao.latitude, reg.localizacao.longitude).then(function (end) {
+            if (!end.texto) return;
+            reg.endereco.texto = end.texto;
+            reg.endereco.aproximado = end.aproximado;
+            reg.endereco.provedor = end.provedor;
+            reg.endereco.pendente = false;
+            reg.endereco.posterior = true;     // endereço obtido depois do registro
+            reg.endereco.obtidoEm = isoLocal(new Date());
+            reg.endereco.tentativas = (reg.endereco.tentativas || []).concat(end.tentativas);
+            var anterior = reg.hash && reg.hash.completo;
+            return hashCompleto(reg, reg.hash.nucleo).then(function (hc) {
+              reg.hash.completoAnterior = anterior;
+              reg.hash.completo = hc;
+              reg.hash.completoRecalculadoEm = isoLocal(new Date());
+              return Banco.put(reg).then(function () { feitos++; });
+            });
+          });
+        });
+      }, Promise.resolve()).then(function () { return { pendentes: pend.length, completados: feitos }; });
+    });
+  }
+
+  // ---------------------------------------------------------------- saída
+  function linkMapa(reg, tipo) {
+    var la = reg.localizacao.latitude, lo = reg.localizacao.longitude;
+    if (tipo === 'osm') return 'https://www.openstreetmap.org/?mlat=' + la + '&mlon=' + lo + '#map=19/' + la + '/' + lo;
+    return 'https://www.google.com/maps?q=' + la + ',' + lo;
+  }
+
+  function formatarData(reg) {
+    try {
+      return new Date(reg.horario.dispositivoEpochMs).toLocaleString('pt-BR', { timeZone: reg.horario.fusoIANA || undefined });
+    } catch (e) {
+      return reg.horario.dispositivoISO;
+    }
+  }
+
+  function textoResumo(reg) {
+    var l = reg.localizacao, h = reg.horario, e = reg.endereco || {};
+    var off = h.fusoOffsetMin, sinal = off >= 0 ? '+' : '-';
+    var utc = 'UTC' + sinal + pad(Math.floor(Math.abs(off) / 60)) + ':' + pad(Math.abs(off) % 60);
+    var linhas = [];
+    linhas.push('REGISTRO DE LOCAL E HORA');
+    linhas.push('Tipo: ' + reg.tipo);
+    linhas.push('Data/hora (relógio do aparelho): ' + formatarData(reg) + ' (' + utc + ')');
+    if (h.referencia) {
+      var d = h.diferencaSeg;
+      linhas.push('Conferência de hora na internet: ' + h.referencia.fonte + ' (diferença ' + (d > 0 ? '+' : '') + String(d).replace('.', ',') + ' s)' +
+        (h.alertaRelogio ? ' — ALERTA: relógio do aparelho divergente' : ''));
+    } else {
+      linhas.push('Conferência de hora na internet: não realizada');
+    }
+    if (e.texto) {
+      linhas.push('Local: ' + e.texto + (e.aproximado ? ' (endereço aproximado)' : '') +
+        (e.posterior ? ' [endereço obtido depois do registro]' : '') + ' — fonte: ' + e.provedor);
+    } else {
+      linhas.push('Local: endereço não obtido');
+    }
+    linhas.push('Coordenadas: ' + l.latitude.toFixed(6) + ', ' + l.longitude.toFixed(6) +
+      ' (margem de erro de cerca de ' + String(l.precisaoM).replace('.', ',') + ' m' + (l.precisaoBaixa ? ' — PRECISÃO BAIXA' : '') + ')');
+    linhas.push('Mapa: ' + linkMapa(reg, 'google'));
+    if (reg.observacao) linhas.push('Observação: ' + reg.observacao);
+    if (reg.hash && reg.hash.nucleo) linhas.push('Hash (SHA-256): ' + reg.hash.nucleo);
+    linhas.push('Registro: ' + reg.id + ' · módulo GeoRegistro v' + reg.versaoModulo);
+    return linhas.join('\n');
+  }
+
+  function exportarJSON(registros) {
+    return listar().then(function (todos) {
+      var rs = registros || todos;
+      return JSON.stringify({
+        formato: 'geo-registro', esquema: ESQUEMA, versaoModulo: VERSAO, appId: CFG.appId,
+        exportadoEm: isoLocal(new Date()), registros: rs
+      }, null, 2);
+    });
+  }
+
+  function baixarJSON(op) {
+    op = op || {};
+    return exportarJSON(op.registros).then(function (json) {
+      var d = new Date();
+      var nome = op.nomeArquivo || ('registros-' + CFG.appId + '-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '.json');
+      var blob = new Blob([json], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = nome;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+      return nome;
+    });
+  }
+
+  function creditos() {
+    var atrib = [PROVEDORES.nominatim.atribuicao];
+    Object.keys(CFG.provedores).forEach(function (n) {
+      if (n !== 'nominatim' && CFG.provedores[n].ativo && PROVEDORES[n]) atrib.push(PROVEDORES[n].atribuicao);
+    });
+    return {
+      modulo: 'GeoRegistro',
+      versao: VERSAO,
+      copyright: '© 2026 Felippe Alvarez. Todos os direitos reservados.',
+      licenca: 'PENDENTE de definição (distribuição a terceiros)',
+      atribuicoes: atrib
+    };
+  }
+
+  function diagnostico() {
+    var nav = global.navigator || {};
+    return {
+      versao: VERSAO,
+      paginaSegura: global.isSecureContext !== false && /^https?:$/.test((global.location && global.location.protocol) || 'https:'),
+      origem: (global.location && global.location.protocol) || '',
+      geolocalizacao: !!(nav && 'geolocation' in nav),
+      indexedDB: !!global.indexedDB,
+      armazenamento: Banco.modo(),
+      cryptoHash: !!(global.crypto && global.crypto.subtle),
+      online: nav.onLine !== false,
+      appId: CFG.appId
+    };
+  }
+
+  function estadoPermissao() {
+    var nav = global.navigator;
+    if (!nav || !nav.permissions || !nav.permissions.query) return Promise.resolve('desconhecido');
+    return nav.permissions.query({ name: 'geolocation' }).then(function (r) { return r.state; }, function () { return 'desconhecido'; });
+  }
+
+  // ---------------------------------------------------------------- textos-base para o app usar
+  var textos = {
+    aviso: 'Este registro usa a localização do seu aparelho somente neste momento, quando você toca no botão. Nenhum rastreamento contínuo é feito.',
+    manual: [
+      'Toque em "Registrar local e hora" e autorize a localização quando o navegador pedir.',
+      'Aguarde alguns segundos. Quanto menor a margem de erro, mais preciso é o ponto. Em locais abertos costuma ser melhor que em locais fechados.',
+      'Se aparecer "precisão baixa", vá para perto de uma janela ou área aberta e tente de novo, ou registre assim mesmo.',
+      'Confira o endereço e a hora, escreva uma observação se quiser e toque em "Salvar".',
+      'Os registros ficam guardados neste aparelho, neste navegador. Se você limpar os dados do navegador, eles são apagados: exporte uma cópia de vez em quando.',
+      'O endereço é obtido na internet. Sem internet, o registro é salvo só com as coordenadas e o endereço pode ser completado depois.'
+    ],
+    limitacoes: [
+      'O registro é feito no próprio aparelho. O relógio e o GPS do aparelho podem ser alterados por quem o usa; por isso o registro é uma declaração do usuário acompanhada de indícios técnicos, e não uma prova absoluta.',
+      'A conferência de hora na internet e o alerta de relógio divergente ajudam, mas não impedem fraude deliberada.',
+      'O hash mostra se o registro foi alterado depois de salvo. Ele não garante que a hora e o local estavam corretos quando foi gerado.',
+      'Dentro de edifícios a margem de erro pode ser grande. O endereço pode vir incompleto ou aproximado.'
+    ],
+    privacidadeBase: 'MODELO-BASE, PRECISA DE REVISÃO JURÍDICA ANTES DE USO COM TERCEIROS. ' +
+      'Este recurso coleta a localização do aparelho (latitude, longitude, margem de erro), a data e a hora, e o endereço correspondente, ' +
+      'somente quando o usuário aciona o registro, para a finalidade de comprovar o local e o horário de uma atividade (por exemplo, vistoria ou visita comercial). ' +
+      'Não há rastreamento contínuo. Os registros ficam armazenados no aparelho do usuário, que pode excluí-los a qualquer momento. ' +
+      'Para obter o endereço e conferir a hora, as coordenadas e uma consulta de horário são enviadas a serviços externos de terceiros ' +
+      '(OpenStreetMap/Nominatim e fontes de hora na internet), que têm políticas próprias. ' +
+      '[PENDENTE: identificação do responsável pelo tratamento, canal de contato do titular, base legal e prazo de guarda.]'
+  };
+
+  // ---------------------------------------------------------------- API pública
+  global.GeoRegistro = {
+    VERSAO: VERSAO,
+    configurar: configurar,
+    capturar: capturar,
+    salvar: salvar,
+    listar: listar,
+    obter: obter,
+    excluir: excluir,
+    verificarIntegridade: verificarIntegridade,
+    completarEnderecosPendentes: completarEnderecosPendentes,
+    exportarJSON: exportarJSON,
+    baixarJSON: baixarJSON,
+    textoResumo: textoResumo,
+    linkMapa: linkMapa,
+    creditos: creditos,
+    diagnostico: diagnostico,
+    estadoPermissao: estadoPermissao,
+    textos: textos,
+    _interno: { montarTexto: montarTexto, canonico: canonico, resolverEndereco: resolverEndereco }  // usado nos testes
+  };
+})(typeof self !== 'undefined' ? self : globalThis);
+
+</script>
+<script>
+(function () {
+  'use strict';
+  GeoRegistro.configurar({ appId: 'teste-geo-registro' });
+
+  var $ = function (id) { return document.getElementById(id); };
+  var rascunho = null;
+
+  function esc(s) {
+    return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function msgStatus(t, ehErro) { var e = $('status'); e.textContent = t || ''; e.className = 'status' + (ehErro ? ' erro' : ''); }
+
+  function aplicarAjustes() {
+    GeoRegistro.configurar({
+      limitePrecisaoM: Math.max(5, Number($('limite').value) || 25),
+      provedores: { nominatim: { ativo: $('chkNom').checked }, bigdatacloud: { ativo: $('chkBdc').checked } }
+    });
+  }
+
+  function mostrarDiagnostico() {
+    var d = GeoRegistro.diagnostico();
+    function ok(b) { return b ? '✔' : '✘'; }
+    GeoRegistro.estadoPermissao().then(function (perm) {
+      $('diag').innerHTML =
+        ok(d.paginaSegura) + ' página segura (https) · ' + ok(d.geolocalizacao) + ' localização disponível · ' +
+        ok(d.cryptoHash) + ' hash · ' + ok(d.online) + ' internet<br>' +
+        'Permissão de localização: <b>' + esc(perm) + '</b> · Armazenamento: <b>' + esc(d.armazenamento) + '</b>' +
+        (!d.paginaSegura ? '<br><span class="erro">Esta página não está em endereço https (origem: ' + esc(d.origem) + '). A localização não funcionará. Abra pelo endereço do site publicado.</span>' : '') +
+        (d.armazenamento === 'memoria' ? ' <span class="erro">(os registros se perdem ao fechar a página)</span>' : '');
+    });
+  }
+
+  function mostrarRascunho(r) {
+    var l = r.localizacao, h = r.horario, e = r.endereco;
+    var linhas = [];
+    linhas.push(['Data/hora (aparelho)', h.dispositivoISO]);
+    linhas.push(['Hora na internet', h.referencia
+      ? esc(h.referencia.fonte) + ' · diferença ' + h.diferencaSeg + ' s' + (h.alertaRelogio ? ' <b class="erro">— RELÓGIO DIVERGENTE</b>' : '')
+      : '<span class="erro">não confirmada</span>']);
+    linhas.push(['Endereço', e.texto
+      ? esc(e.texto) + (e.aproximado ? ' <small>(aproximado)</small>' : '') + ' <small>· fonte: ' + esc(e.provedor) + '</small>'
+      : '<span class="erro">não obtido</span> <small>(ficará pendente)</small>']);
+    linhas.push(['Coordenadas', l.latitude.toFixed(6) + ', ' + l.longitude.toFixed(6)]);
+    linhas.push(['Margem de erro', l.precisaoM + ' m' + (l.precisaoBaixa ? ' <b class="erro">— PRECISÃO BAIXA</b>' : '')]);
+    linhas.push(['Mapa', '<a href="' + esc(GeoRegistro.linkMapa(r, 'google')) + '" target="_blank" rel="noopener">abrir no mapa</a>']);
+    linhas.push(['Tentativas de endereço', e.tentativas.map(function (t) {
+      return esc(t.provedor) + (t.ok ? ' ✔' : ' ✘ ' + esc(t.erro || ''));
+    }).join(' · ') || '—']);
+    $('dados').innerHTML = linhas.map(function (x) { return '<dt>' + x[0] + '</dt><dd>' + x[1] + '</dd>'; }).join('');
+    $('resultado').hidden = false;
+  }
+
+  function registrar() {
+    aplicarAjustes();
+    rascunho = null;
+    $('resultado').hidden = true;
+    $('btnRegistrar').disabled = true;
+    msgStatus('Solicitando localização…');
+    GeoRegistro.capturar({
+      tipo: $('tipo').value,
+      onStatus: function (s) {
+        if (s.etapa === 'localizando') msgStatus('Localizando… margem de erro atual: ' + s.precisaoM + ' m');
+        else if (s.etapa === 'obtendo_endereco_e_hora') msgStatus('Posição obtida (±' + s.precisaoM + ' m). Buscando endereço e conferindo a hora…');
+      }
+    }).then(function (r) {
+      rascunho = r;
+      msgStatus(r.localizacao.precisaoBaixa
+        ? 'Precisão baixa. Vá para um local mais aberto e tente de novo, ou salve assim mesmo.'
+        : 'Pronto. Confira os dados e salve.');
+      mostrarRascunho(r);
+    }).catch(function (e) {
+      msgStatus(e.message || 'Falha ao registrar.', true);
+    }).then(function () { $('btnRegistrar').disabled = false; });
+  }
+
+  function salvar() {
+    if (!rascunho) return;
+    GeoRegistro.salvar(rascunho, { observacao: $('obs').value }).then(function () {
+      rascunho = null; $('resultado').hidden = true; $('obs').value = '';
+      msgStatus('Registro salvo.');
+      atualizarLista();
+    }).catch(function (e) { msgStatus(e.message, true); });
+  }
+
+  function atualizarLista() {
+    GeoRegistro.listar().then(function (rs) {
+      if (!rs.length) { $('lista').innerHTML = '<div class="status">Nenhum registro salvo.</div>'; return; }
+      $('lista').innerHTML = rs.map(function (r) {
+        return '<div class="item" data-id="' + esc(r.id) + '">' +
+          '<b>' + esc(r.tipo) + '</b> · ' + esc(r.horario.dispositivoISO) +
+          '<pre>' + esc(GeoRegistro.textoResumo(r)) + '</pre>' +
+          '<div class="linha">' +
+          '<button class="sec" data-acao="copiar">Copiar resumo</button>' +
+          '<button class="sec" data-acao="verificar">Verificar integridade</button>' +
+          '<button class="perigo" data-acao="excluir">Excluir</button>' +
+          '<span class="status" data-res></span></div></div>';
+      }).join('');
+    });
+  }
+
+  $('lista').addEventListener('click', function (ev) {
+    var b = ev.target.closest('button'); if (!b) return;
+    var item = b.closest('.item'); var id = item.getAttribute('data-id');
+    var res = item.querySelector('[data-res]');
+    GeoRegistro.obter(id).then(function (r) {
+      if (!r) return;
+      var acao = b.getAttribute('data-acao');
+      if (acao === 'copiar') {
+        var t = GeoRegistro.textoResumo(r);
+        (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(
+          function () { res.textContent = 'Copiado.'; }, function () { res.textContent = 'Não foi possível copiar.'; });
+      } else if (acao === 'verificar') {
+        GeoRegistro.verificarIntegridade(r).then(function (v) {
+          res.textContent = v.ok ? 'Íntegro ✔' : 'ALTERADO ✘ (' + v.motivo + ')';
+        });
+      } else if (acao === 'excluir') {
+        if (confirm('Excluir este registro deste aparelho?')) GeoRegistro.excluir(id).then(atualizarLista);
+      }
+    });
+  });
+
+  $('btnRegistrar').addEventListener('click', registrar);
+  $('btnRepetir').addEventListener('click', registrar);
+  $('btnSalvar').addEventListener('click', salvar);
+  $('btnDescartar').addEventListener('click', function () { rascunho = null; $('resultado').hidden = true; msgStatus('Registro descartado.'); });
+  $('btnAtualizar').addEventListener('click', atualizarLista);
+  $('btnExportar').addEventListener('click', function () {
+    GeoRegistro.baixarJSON().then(function (n) { msgStatus('Arquivo gerado: ' + n); });
+  });
+  $('btnPendentes').addEventListener('click', function () {
+    aplicarAjustes();
+    GeoRegistro.completarEnderecosPendentes().then(function (r) {
+      msgStatus('Pendentes: ' + r.pendentes + ' · completados: ' + r.completados);
+      atualizarLista();
+    });
+  });
+
+  $('versao').textContent = 'v' + GeoRegistro.VERSAO;
+  $('aviso').textContent = GeoRegistro.textos.aviso;
+  var c = GeoRegistro.creditos();
+  $('creditos').innerHTML =
+    '<p><b>' + esc(c.modulo) + '</b> v' + esc(c.versao) + '<br>' + esc(c.copyright) + '<br>Licença: ' + esc(c.licenca) + '</p>' +
+    '<p><b>Atribuições</b><br>' + c.atribuicoes.map(function (a) {
+      return '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">' + esc(a.nome) + '</a> — ' + esc(a.texto);
+    }).join('<br>') + '</p>' +
+    '<p><b>Manual de uso</b></p><ol>' + GeoRegistro.textos.manual.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ol>' +
+    '<p><b>Limitações</b></p><ul>' + GeoRegistro.textos.limitacoes.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>' +
+    '<p><b>Privacidade (modelo-base, pendente de revisão)</b><br>' + esc(GeoRegistro.textos.privacidadeBase) + '</p>';
+
+  mostrarDiagnostico();
+  atualizarLista();
+})();
+</script>
+</body>
+</html>
