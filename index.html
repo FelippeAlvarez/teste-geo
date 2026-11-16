@@ -61,9 +61,12 @@
       <textarea id="obs" rows="2" placeholder="Ex.: nome do cliente, unidade vistoriada…"></textarea>
       <div class="linha">
         <button id="btnSalvar">Salvar registro</button>
+        <button class="sec" id="btnPdfAgora">Baixar PDF</button>
+        <button class="sec" id="btnPdfCompAgora">Compartilhar PDF</button>
         <button class="sec" id="btnDescartar">Descartar</button>
         <button class="sec" id="btnRepetir">Tentar de novo</button>
       </div>
+      <div class="status" id="msgResultado" role="status"></div>
     </div>
   </div>
 
@@ -1563,7 +1566,8 @@
   GeoRegistro.configurar({ appId: 'teste-geo-registro' });
 
   var $ = function (id) { return document.getElementById(id); };
-  var rascunho = null;
+  var rascunho = null, salvoAtual = null;
+  function msgR(t, ehErro) { var e = $('msgResultado'); e.textContent = t || ''; e.className = 'status' + (ehErro ? ' erro' : ''); }
 
   function esc(s) {
     return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -1625,7 +1629,7 @@
 
   function registrar() {
     aplicarAjustes();
-    rascunho = null;
+    rascunho = null; salvoAtual = null; $('obs').readOnly = false; msgR('');
     $('resultado').hidden = true;
     $('btnRegistrar').disabled = true;
     msgStatus('Solicitando localização…');
@@ -1649,7 +1653,7 @@
   function salvar() {
     if (!rascunho) return;
     GeoRegistro.salvar(rascunho, { observacao: $('obs').value }).then(function () {
-      rascunho = null; $('resultado').hidden = true; $('obs').value = '';
+      rascunho = null; salvoAtual = null; $('obs').readOnly = false; $('resultado').hidden = true; $('obs').value = ''; msgR('');
       msgStatus('Registro salvo.');
       atualizarLista();
     }).catch(function (e) { msgStatus(e.message, true); });
@@ -1712,7 +1716,38 @@
   $('btnRegistrar').addEventListener('click', registrar);
   $('btnRepetir').addEventListener('click', registrar);
   $('btnSalvar').addEventListener('click', salvar);
-  $('btnDescartar').addEventListener('click', function () { rascunho = null; $('resultado').hidden = true; msgStatus('Registro descartado.'); });
+  $('btnDescartar').addEventListener('click', function () { rascunho = null; salvoAtual = null; $('obs').readOnly = false; msgR(''); $('resultado').hidden = true; msgStatus('Registro descartado.'); });
+
+  // O PDF precisa do registro salvo (é o salvamento que gera o identificador de integridade/hash).
+  // Se ainda não foi salvo, salva primeiro e mantém o quadro aberto para o próximo toque.
+  function garantirSalvo() {
+    if (salvoAtual) return Promise.resolve({ reg: salvoAtual, novo: false });
+    if (!rascunho) return Promise.reject(new Error('Não há registro em andamento. Toque em "Registrar local e hora".'));
+    return GeoRegistro.salvar(rascunho, { observacao: $('obs').value }).then(function (reg) {
+      salvoAtual = reg; $('obs').readOnly = true; atualizarLista();
+      return { reg: reg, novo: true };
+    });
+  }
+  $('btnPdfAgora').addEventListener('click', function () {
+    msgR('Gerando PDF…');
+    garantirSalvo().then(function (x) {
+      return GeoRegistro.baixarPDF(x.reg).then(function (n) {
+        msgR((x.novo ? 'Registro salvo. ' : '') + 'PDF gerado: ' + n + '. Procure em Downloads do aparelho.');
+      });
+    }).catch(function (e) { msgR(e.message || 'Falha ao gerar o PDF.', true); });
+  });
+  $('btnPdfCompAgora').addEventListener('click', function () {
+    msgR('Preparando PDF…');
+    garantirSalvo().then(function (x) {
+      return GeoRegistro.compartilharPDF(x.reg).then(function (c) {
+        if (c.ok) msgR((x.novo ? 'Registro salvo. ' : '') + 'PDF compartilhado.');
+        else if (c.motivo === 'CANCELADO') msgR((x.novo ? 'Registro salvo. ' : '') + 'Compartilhamento cancelado.');
+        else if (c.motivo === 'SEM_COMPARTILHAMENTO' || c.motivo === 'SEM_SUPORTE_A_ARQUIVOS')
+          msgR((x.novo ? 'Registro salvo. ' : '') + 'Este aparelho/navegador não permite compartilhar arquivo. Use "Baixar PDF" e envie o arquivo pelo WhatsApp.', true);
+        else msgR((x.novo ? 'Registro salvo. ' : '') + 'O aparelho não abriu o compartilhamento. Toque em "Compartilhar PDF" mais uma vez.', true);
+      });
+    }).catch(function (e) { msgR(e.message || 'Falha ao compartilhar o PDF.', true); });
+  });
   $('btnAtualizar').addEventListener('click', function () {
     atualizarLista();
     GeoRegistro.listar().then(function (rs) { msgL('Lista atualizada: ' + rs.length + ' registro(s).'); });
