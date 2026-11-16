@@ -73,6 +73,7 @@
     <input type="number" id="limite" value="25" min="5" max="500">
     <label><input type="checkbox" id="chkBdc"> Ativar BigDataCloud como 2º provedor (só localidade; termos ainda a verificar)</label>
     <label><input type="checkbox" id="chkNom" checked> Ativar Nominatim (OpenStreetMap)</label>
+    <label><input type="checkbox" id="chkMapa" checked> Gerar imagem do mapa (OpenStreetMap)</label>
     <small>Para simular falha do 1º provedor e ver a troca automática, desmarque o Nominatim e marque o BigDataCloud.</small>
   </div>
 
@@ -80,7 +81,8 @@
     <h2>Registros salvos neste aparelho</h2>
     <div class="linha" style="margin-top:0">
       <button class="sec" id="btnExportar">Exportar JSON</button>
-      <button class="sec" id="btnPendentes">Completar endereços pendentes</button>
+      <label style="display:inline-block;margin:8px 0 0"><input type="checkbox" id="chkSemImg"> sem imagens</label>
+      <button class="sec" id="btnPendentes">Completar pendentes (endereço e mapa)</button>
       <button class="sec" id="btnAtualizar">Atualizar lista</button>
     </div>
     <div id="lista"></div>
@@ -97,7 +99,7 @@
 <script>
 /*!
  * GeoRegistro — motor de registro de local (GPS), endereço e horário
- * Versão 1.0.1
+ * Versão 1.1.0
  * Copyright © 2026 Felippe Alvarez. Todos os direitos reservados.
  * (Licença de distribuição a terceiros: PENDENTE de definição.)
  *
@@ -136,6 +138,18 @@
  *        GeoRegistro.diagnostico()                -> o que o aparelho/navegador permite
  *        GeoRegistro.estadoPermissao()            -> 'granted' | 'prompt' | 'denied' | 'desconhecido'
  *
+ *   IMAGEM DE MAPA (opcional, desligada por padrão)
+ *        GeoRegistro.configurar({ mapa: { ativo: true } });
+ *      Com ela ligada, capturar() também monta uma imagem JPEG do mapa (OpenStreetMap) com o
+ *      marcador do ponto, o círculo da margem de erro, escala, data/hora e atribuição, e guarda
+ *      em rascunho.mapa.dataUrl (use em <img src="...">). Sem internet, o registro sai com
+ *      mapa.pendente = true e a imagem pode ser feita depois:
+ *        GeoRegistro.completarPendentes()         -> completa endereços E mapas pendentes
+ *        GeoRegistro.baixarImagemMapa(reg)        -> baixa o JPEG
+ *        GeoRegistro.compartilhar(reg)            -> abre o compartilhamento do aparelho (texto + imagem)
+ *        GeoRegistro.exportarJSON(regs, { semImagens: true }) / baixarJSON({ semImagens: true })
+ *      Para um registro isolado: capturar({ mapa: true|false }) sobrepõe a configuração.
+ *
  * ERROS
  *   As funções que falham lançam um Error com .codigo e .message em português:
  *   PERMISSAO_NEGADA, SEM_GPS, INSEGURO, ORIGEM_INVALIDA, TEMPO_ESGOTADO, POSICAO_INDISPONIVEL, REGISTRO_INVALIDO.
@@ -147,7 +161,7 @@
 (function (global) {
   'use strict';
 
-  var VERSAO = '1.0.1';
+  var VERSAO = '1.1.0';
   var ESQUEMA = 1;
 
   // ---------------------------------------------------------------- configuração
@@ -167,7 +181,27 @@
       // Gratuito com cadastro (sem cartão, a confirmar). Precisa de chave restrita ao domínio.
       locationiq:   { ativo: false, chave: '', regiao: 'us1' }
     },
-    fontesHora: ['worldtimeapi', 'timeapi']
+    fontesHora: ['worldtimeapi', 'timeapi'],
+    mapa: {
+      ativo: false,          // desligado por padrão; o app liga com configurar({ mapa: { ativo: true } })
+      largura: 640,
+      altura: 400,
+      qualidadeJPEG: 0.82,
+      zoomAuto: true,        // aproxima quando o GPS está preciso, afasta quando está ruim
+      zoomFixo: 18,
+      zoomMax: 18,
+      zoomMin: 14,
+      timeoutTileMs: 6000,
+      ordem: ['osm'],
+      provedores: {
+        osm: {
+          ativo: true,
+          url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          atribuicao: '© OpenStreetMap contributors',
+          nome: 'OpenStreetMap'
+        }
+      }
+    }
   };
 
   function mesclar(dest, orig) {
@@ -497,6 +531,207 @@
     return proximo();
   }
 
+  // ---------------------------------------------------------------- imagem de mapa
+  var cacheTiles = {};
+  var cacheTilesOrdem = [];
+
+  function mppAt(lat, z) { return 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, z); }
+  function mundoX(lon, z) { return (lon + 180) / 360 * 256 * Math.pow(2, z); }
+  function mundoY(lat, z) {
+    var r = Math.max(-85.0511, Math.min(85.0511, lat)) * Math.PI / 180;
+    return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 256 * Math.pow(2, z);
+  }
+
+  // Escolhe o maior zoom em que o círculo da margem de erro ainda cabe bem na imagem.
+  function escolherZoom(lat, acc, altura, mc) {
+    if (!mc.zoomAuto) return mc.zoomFixo;
+    var lim = altura * 0.4;
+    for (var z = mc.zoomMax; z >= mc.zoomMin; z--) {
+      if (acc / mppAt(lat, z) <= lim) return z;
+    }
+    return mc.zoomMin;
+  }
+
+  function carregarImagem(url, ms) {
+    if (cacheTiles[url]) return Promise.resolve(cacheTiles[url]);
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.crossOrigin = 'anonymous';
+      var t = setTimeout(function () { img.onload = img.onerror = null; reject(erro('TILE_TEMPO', 'Tempo esgotado ao baixar o mapa.')); }, ms);
+      img.onload = function () {
+        clearTimeout(t);
+        cacheTiles[url] = img; cacheTilesOrdem.push(url);
+        if (cacheTilesOrdem.length > 48) delete cacheTiles[cacheTilesOrdem.shift()];
+        resolve(img);
+      };
+      img.onerror = function () { clearTimeout(t); reject(erro('TILE_ERRO', 'Não foi possível baixar um pedaço do mapa.')); };
+      img.src = url;
+    });
+  }
+
+  function emLotes(tarefas, limite) {
+    var i = 0, res = new Array(tarefas.length);
+    function trabalhador() {
+      if (i >= tarefas.length) return Promise.resolve();
+      var k = i++;
+      return tarefas[k]().then(function (v) { res[k] = v; }).then(trabalhador);
+    }
+    var ws = [];
+    for (var n = 0; n < Math.min(limite, tarefas.length); n++) ws.push(trabalhador());
+    return Promise.all(ws).then(function () { return res; });
+  }
+
+  function utcTexto(offMin) {
+    var sinal = offMin >= 0 ? '+' : '-';
+    return 'UTC' + sinal + pad(Math.floor(Math.abs(offMin) / 60)) + ':' + pad(Math.abs(offMin) % 60);
+  }
+
+  function desenharMapa(info, prov, z) {
+    var mc = CFG.mapa, W = mc.largura, H = mc.altura;
+    var cv = global.document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    var ctx = cv.getContext('2d');
+    ctx.fillStyle = '#e6e6e6';
+    ctx.fillRect(0, 0, W, H);
+
+    var cx = mundoX(info.lon, z), cy = mundoY(info.lat, z);
+    var x0 = cx - W / 2, y0 = cy - H / 2;
+    var n = Math.pow(2, z);
+    var tx0 = Math.floor(x0 / 256), tx1 = Math.floor((x0 + W - 1) / 256);
+    var ty0 = Math.floor(y0 / 256), ty1 = Math.floor((y0 + H - 1) / 256);
+    var tarefas = [];
+    for (var ty = ty0; ty <= ty1; ty++) {
+      if (ty < 0 || ty >= n) continue;
+      for (var tx = tx0; tx <= tx1; tx++) {
+        (function (tx, ty) {
+          var xw = ((tx % n) + n) % n;
+          var url = prov.url.replace('{z}', z).replace('{x}', xw).replace('{y}', ty);
+          tarefas.push(function () {
+            return carregarImagem(url, mc.timeoutTileMs).then(function (img) {
+              ctx.drawImage(img, Math.round(tx * 256 - x0), Math.round(ty * 256 - y0));
+            });
+          });
+        })(tx, ty);
+      }
+    }
+
+    return emLotes(tarefas, 4).then(function () {
+      var px = W / 2, py = H / 2;
+      var mpp = mppAt(info.lat, z);
+      var r = Math.max(info.acc / mpp, 4);
+
+      // círculo da margem de erro
+      ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(31,95,191,0.18)'; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = '#1f5fbf'; ctx.stroke();
+
+      // marcador (a ponta do alfinete fica exatamente sobre o ponto)
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.beginPath(); ctx.ellipse(0, 0, 7, 3, 0, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,0.30)'; ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(-5, -10, -13, -17, -13, -25);
+      ctx.arc(0, -25, 13, Math.PI, 0, false);
+      ctx.bezierCurveTo(13, -17, 5, -10, 0, 0);
+      ctx.closePath();
+      ctx.fillStyle = '#d32f2f'; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, -25, 5, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill();
+      ctx.restore();
+
+      var fonte = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+
+      // atribuição (obrigatória), no canto superior direito
+      ctx.font = '11px ' + fonte;
+      var atr = prov.atribuicao || '';
+      var wa = ctx.measureText(atr).width + 10;
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(W - wa, 0, wa, 18);
+      ctx.fillStyle = '#222'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(atr, W - wa + 5, 9);
+
+      // faixa de informações na base
+      var linhas = [
+        info.dataTexto + ' (' + utcTexto(info.offMin) + ')   ·   margem de erro ≈ ' + String(Math.round(info.acc * 10) / 10).replace('.', ',') + ' m',
+        info.lat.toFixed(6) + ', ' + info.lon.toFixed(6)
+      ];
+      if (info.posterior) linhas.push('Imagem gerada depois do registro, em ' + info.geradoTexto);
+      var hb = 10 + linhas.length * 17;
+      ctx.fillStyle = 'rgba(0,0,0,0.66)'; ctx.fillRect(0, H - hb, W, hb);
+      ctx.fillStyle = '#ffffff'; ctx.font = '13px ' + fonte; ctx.textBaseline = 'middle';
+      linhas.forEach(function (t, i) { ctx.fillText(t, 8, H - hb + 6 + 9 + i * 17); });
+
+      // barra de escala
+      var nice = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000], len = nice[0];
+      nice.forEach(function (v) { if (v / mpp <= 120) len = v; });
+      var lp = len / mpp, bx = 10, by = H - hb - 14;
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(bx - 4, by - 14, lp + 8, 22);
+      ctx.strokeStyle = '#222'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(bx, by - 4); ctx.lineTo(bx, by + 3); ctx.lineTo(bx + lp, by + 3); ctx.lineTo(bx + lp, by - 4); ctx.stroke();
+      ctx.fillStyle = '#222'; ctx.font = '11px ' + fonte; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(len >= 1000 ? (len / 1000) + ' km' : len + ' m', bx + 4, by - 6);
+
+      var q = mc.qualidadeJPEG;
+      var url = cv.toDataURL('image/jpeg', q);   // falha com SecurityError se o servidor de mapa não permitir uso da imagem
+      var mime = 'image/jpeg';
+      if (url.indexOf('data:image/jpeg') !== 0) { url = cv.toDataURL('image/png'); mime = 'image/png'; }
+      return { dataUrl: url, mimeType: mime };
+    });
+  }
+
+  // Nunca rejeita: devolve a imagem ou um objeto "pendente" explicando por quê.
+  function gerarMapa(info) {
+    var mc = CFG.mapa;
+    var nav = global.navigator;
+    var provs = mc.ordem.filter(function (n) { return mc.provedores[n] && mc.provedores[n].ativo; });
+    if (!global.document || !global.document.createElement || !provs.length) {
+      return Promise.resolve({ dataUrl: null, pendente: true, erro: 'SEM_CANVAS_OU_PROVEDOR', tentativas: [] });
+    }
+    if (nav && nav.onLine === false) {
+      return Promise.resolve({ dataUrl: null, pendente: true, erro: 'SEM_INTERNET', tentativas: [] });
+    }
+    var z = escolherZoom(info.lat, info.acc, mc.altura, mc);
+    var tentativas = [];
+    var fila = provs.slice();
+
+    function proximo() {
+      if (!fila.length) return Promise.resolve({ dataUrl: null, pendente: true, erro: 'FALHA_TILES', tentativas: tentativas });
+      var nome = fila.shift();
+      var prov = mc.provedores[nome];
+      return desenharMapa(info, prov, z).then(function (img) {
+        return sha256hex(img.dataUrl).then(function (h) {
+          tentativas.push({ provedor: nome, ok: true });
+          return {
+            dataUrl: img.dataUrl, mimeType: img.mimeType, largura: mc.largura, altura: mc.altura, zoom: z,
+            provedor: nome, atribuicao: prov.atribuicao, geradoEm: isoLocal(new Date()),
+            posterior: !!info.posterior, sha256: h, pendente: false, tentativas: tentativas
+          };
+        });
+      }).then(null, function (e) {
+        tentativas.push({ provedor: nome, ok: false, erro: (e && (e.codigo || e.name)) || 'ERRO' });
+        return proximo();
+      });
+    }
+    return proximo();
+  }
+
+  function infoMapa(lat, lon, acc, epochMs, fuso, offMin, posterior) {
+    var dataTexto;
+    try { dataTexto = new Date(epochMs).toLocaleString('pt-BR', { timeZone: fuso || undefined }); }
+    catch (e) { dataTexto = new Date(epochMs).toISOString(); }
+    return {
+      lat: lat, lon: lon, acc: acc, offMin: offMin, dataTexto: dataTexto, posterior: !!posterior,
+      geradoTexto: posterior ? new Date().toLocaleString('pt-BR', { timeZone: fuso || undefined }) : ''
+    };
+  }
+
+  function mapaParaCaptura(op, p, instante) {
+    var quer = (op.mapa !== undefined) ? !!op.mapa : !!CFG.mapa.ativo;
+    if (!quer) return Promise.resolve(null);
+    var fuso = '';
+    try { fuso = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* ignora */ }
+    return gerarMapa(infoMapa(p.lat, p.lon, p.acc, instante.getTime(), fuso, -instante.getTimezoneOffset(), false));
+  }
+
   // ---------------------------------------------------------------- hash e integridade
   function nucleo(reg) {
     return {
@@ -509,7 +744,25 @@
     return { texto: e.texto || null, provedor: e.provedor || null, posterior: !!e.posterior };
   }
   function hashNucleo(reg) { return sha256hex(canonico(nucleo(reg))); }
-  function hashCompleto(reg, hn) { return sha256hex(canonico({ nucleo: hn, endereco: parteEndereco(reg) })); }
+  // O mapa só entra na conta quando existe imagem; registros sem mapa mantêm a fórmula anterior.
+  function hashCompleto(reg, hn) {
+    var o = { nucleo: hn, endereco: parteEndereco(reg) };
+    if (reg.mapa && reg.mapa.dataUrl && reg.mapa.sha256) { o.mapa = reg.mapa.sha256; o.mapaPosterior = !!reg.mapa.posterior; }
+    return sha256hex(canonico(o));
+  }
+
+  // Recalcula o hash completo após o endereço ou o mapa serem completados depois, guardando o histórico.
+  function atualizarHashCompleto(reg) {
+    return hashCompleto(reg, reg.hash.nucleo).then(function (hc) {
+      var antes = reg.hash.completo;
+      if (hc === antes) return;
+      var agora = isoLocal(new Date());
+      reg.hash.historico = (reg.hash.historico || []).concat([{ em: agora, completoAnterior: antes }]);
+      reg.hash.completoAnterior = antes;
+      reg.hash.completo = hc;
+      reg.hash.completoRecalculadoEm = agora;
+    });
+  }
 
   function calcularHashes(reg) {
     return hashNucleo(reg).then(function (hn) {
@@ -522,14 +775,22 @@
 
   function verificarIntegridade(reg) {
     if (!reg || !reg.hash || !reg.hash.nucleo) {
-      return Promise.resolve({ ok: false, motivo: 'SEM_HASH', nucleoOk: false, completoOk: false });
+      return Promise.resolve({ ok: false, motivo: 'SEM_HASH', nucleoOk: false, completoOk: false, mapaOk: false });
     }
-    return hashNucleo(reg).then(function (hn) {
-      var nucleoOk = hn === reg.hash.nucleo;
+    var temMapa = !!(reg.mapa && reg.mapa.dataUrl);
+    return Promise.all([
+      hashNucleo(reg),
+      temMapa ? sha256hex(reg.mapa.dataUrl) : Promise.resolve(null)
+    ]).then(function (r) {
+      var nucleoOk = r[0] === reg.hash.nucleo;
+      var mapaOk = temMapa ? (r[1] === reg.mapa.sha256) : true;
       return hashCompleto(reg, reg.hash.nucleo).then(function (hc) {
         var completoOk = hc === reg.hash.completo;
-        return { ok: nucleoOk && completoOk, nucleoOk: nucleoOk, completoOk: completoOk,
-          motivo: nucleoOk ? (completoOk ? null : 'ENDERECO_ALTERADO') : 'DADOS_ALTERADOS' };
+        var motivo = null;
+        if (!nucleoOk) motivo = 'DADOS_ALTERADOS';
+        else if (!mapaOk) motivo = 'IMAGEM_ALTERADA';
+        else if (!completoOk) motivo = 'ENDERECO_OU_MAPA_ALTERADO';
+        return { ok: nucleoOk && completoOk && mapaOk, nucleoOk: nucleoOk, completoOk: completoOk, mapaOk: mapaOk, motivo: motivo };
       });
     });
   }
@@ -623,8 +884,8 @@
     return obterPosicao(st, limite, tempoMax).then(function (p) {
       var instante = new Date();
       st({ etapa: 'obtendo_endereco_e_hora', precisaoM: Math.round(p.acc) });
-      return Promise.all([resolverEndereco(p.lat, p.lon), obterHoraReferencia()]).then(function (res) {
-        var end = res[0], ref = res[1];
+      return Promise.all([resolverEndereco(p.lat, p.lon), obterHoraReferencia(), mapaParaCaptura(op, p, instante)]).then(function (res) {
+        var end = res[0], ref = res[1], mapa = res[2];
         var nav = global.navigator || {};
         var fuso = '';
         try { fuso = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* ignora */ }
@@ -661,6 +922,7 @@
           aparelho: {
             userAgent: nav.userAgent || '', plataforma: nav.platform || '', idioma: nav.language || ''
           },
+          mapa: mapa,
           hash: null,
           salvoEm: null
         };
@@ -709,16 +971,36 @@
             reg.endereco.posterior = true;     // endereço obtido depois do registro
             reg.endereco.obtidoEm = isoLocal(new Date());
             reg.endereco.tentativas = (reg.endereco.tentativas || []).concat(end.tentativas);
-            var anterior = reg.hash && reg.hash.completo;
-            return hashCompleto(reg, reg.hash.nucleo).then(function (hc) {
-              reg.hash.completoAnterior = anterior;
-              reg.hash.completo = hc;
-              reg.hash.completoRecalculadoEm = isoLocal(new Date());
+            return atualizarHashCompleto(reg).then(function () {
               return Banco.put(reg).then(function () { feitos++; });
             });
           });
         });
       }, Promise.resolve()).then(function () { return { pendentes: pend.length, completados: feitos }; });
+    });
+  }
+
+  // Gera a imagem de mapa dos registros que ficaram sem ela (sem internet ou falha dos servidores de mapa).
+  function completarMapasPendentes() {
+    return listar().then(function (rs) {
+      var pend = rs.filter(function (r) { return r.mapa && !r.mapa.dataUrl && r.mapa.pendente; });
+      var feitos = 0;
+      return pend.reduce(function (cadeia, reg) {
+        return cadeia.then(function () {
+          var l = reg.localizacao, h = reg.horario;
+          return gerarMapa(infoMapa(l.latitude, l.longitude, l.precisaoM, h.dispositivoEpochMs, h.fusoIANA, h.fusoOffsetMin, true)).then(function (m) {
+            if (!m.dataUrl) { reg.mapa.tentativas = (reg.mapa.tentativas || []).concat(m.tentativas || []); reg.mapa.erro = m.erro; return Banco.put(reg); }
+            reg.mapa = m;
+            return atualizarHashCompleto(reg).then(function () { return Banco.put(reg).then(function () { feitos++; }); });
+          });
+        });
+      }, Promise.resolve()).then(function () { return { pendentes: pend.length, completados: feitos }; });
+    });
+  }
+
+  function completarPendentes() {
+    return completarEnderecosPendentes().then(function (e) {
+      return completarMapasPendentes().then(function (m) { return { enderecos: e, mapas: m }; });
     });
   }
 
@@ -761,35 +1043,91 @@
     linhas.push('Coordenadas: ' + l.latitude.toFixed(6) + ', ' + l.longitude.toFixed(6) +
       ' (margem de erro de cerca de ' + String(l.precisaoM).replace('.', ',') + ' m' + (l.precisaoBaixa ? ' — PRECISÃO BAIXA' : '') + ')');
     linhas.push('Mapa: ' + linkMapa(reg, 'google'));
+    if (reg.mapa && reg.mapa.dataUrl) {
+      linhas.push('Imagem do mapa: anexada (' + reg.mapa.atribuicao + ', zoom ' + reg.mapa.zoom + (reg.mapa.posterior ? ', gerada depois do registro' : '') + ')');
+    } else if (reg.mapa && reg.mapa.pendente) {
+      linhas.push('Imagem do mapa: não gerada (pendente)');
+    }
     if (reg.observacao) linhas.push('Observação: ' + reg.observacao);
     if (reg.hash && reg.hash.nucleo) linhas.push('Hash (SHA-256): ' + reg.hash.nucleo);
     linhas.push('Registro: ' + reg.id + ' · módulo GeoRegistro v' + reg.versaoModulo);
     return linhas.join('\n');
   }
 
-  function exportarJSON(registros) {
+  function semImagem(reg) {
+    var c = JSON.parse(JSON.stringify(reg));
+    if (c.mapa && c.mapa.dataUrl) { c.mapa.dataUrl = null; c.mapa.imagemOmitidaNaExportacao = true; }
+    return c;
+  }
+
+  function exportarJSON(registros, opcoes) {
     return listar().then(function (todos) {
       var rs = registros || todos;
+      if (opcoes && opcoes.semImagens) rs = rs.map(semImagem);
       return JSON.stringify({
         formato: 'geo-registro', esquema: ESQUEMA, versaoModulo: VERSAO, appId: CFG.appId,
-        exportadoEm: isoLocal(new Date()), registros: rs
+        exportadoEm: isoLocal(new Date()), semImagens: !!(opcoes && opcoes.semImagens), registros: rs
       }, null, 2);
     });
   }
 
+  function baixarBlob(blob, nome) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = nome;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+
   function baixarJSON(op) {
     op = op || {};
-    return exportarJSON(op.registros).then(function (json) {
+    return exportarJSON(op.registros, { semImagens: !!op.semImagens }).then(function (json) {
       var d = new Date();
       var nome = op.nomeArquivo || ('registros-' + CFG.appId + '-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '.json');
-      var blob = new Blob([json], { type: 'application/json' });
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url; a.download = nome;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+      baixarBlob(new Blob([json], { type: 'application/json' }), nome);
       return nome;
     });
+  }
+
+  function dataUrlParaBlob(du) {
+    var p = du.split(',');
+    var mime = /data:([^;]+)/.exec(p[0])[1];
+    var bin = atob(p[1]);
+    var a = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+    return new Blob([a], { type: mime });
+  }
+
+  function nomeBaseArquivo(reg) {
+    var d = new Date(reg.horario.dispositivoEpochMs);
+    return 'registro-' + String(reg.tipo).replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '-' +
+      d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes());
+  }
+
+  function baixarImagemMapa(reg, nome) {
+    if (!reg || !reg.mapa || !reg.mapa.dataUrl) return Promise.reject(erro('SEM_MAPA', 'Este registro não tem imagem de mapa.'));
+    var ext = reg.mapa.mimeType === 'image/png' ? '.png' : '.jpg';
+    var n = nome || (nomeBaseArquivo(reg) + ext);
+    baixarBlob(dataUrlParaBlob(reg.mapa.dataUrl), n);
+    return Promise.resolve(n);
+  }
+
+  // Abre o compartilhamento do aparelho (WhatsApp etc.) com o resumo em texto e, se possível, a imagem.
+  function compartilhar(reg) {
+    var nav = global.navigator || {};
+    if (!nav.share) return Promise.resolve({ ok: false, motivo: 'SEM_COMPARTILHAMENTO' });
+    var dados = { title: 'Registro de local e hora', text: textoResumo(reg) };
+    try {
+      if (reg.mapa && reg.mapa.dataUrl && global.File && nav.canShare) {
+        var ext = reg.mapa.mimeType === 'image/png' ? '.png' : '.jpg';
+        var f = new global.File([dataUrlParaBlob(reg.mapa.dataUrl)], nomeBaseArquivo(reg) + ext, { type: reg.mapa.mimeType });
+        if (nav.canShare({ files: [f] })) dados.files = [f];
+      }
+    } catch (e) { /* segue só com o texto */ }
+    return nav.share(dados).then(
+      function () { return { ok: true, comImagem: !!dados.files }; },
+      function (e) { return { ok: false, motivo: (e && e.name === 'AbortError') ? 'CANCELADO' : 'ERRO' }; }
+    );
   }
 
   function creditos() {
@@ -797,6 +1135,14 @@
     Object.keys(CFG.provedores).forEach(function (n) {
       if (n !== 'nominatim' && CFG.provedores[n].ativo && PROVEDORES[n]) atrib.push(PROVEDORES[n].atribuicao);
     });
+    if (CFG.mapa.ativo) {
+      CFG.mapa.ordem.forEach(function (n) {
+        var pv = CFG.mapa.provedores[n];
+        if (pv && pv.ativo && !atrib.some(function (a) { return a.texto === pv.atribuicao; })) {
+          atrib.push({ nome: pv.nome || n, texto: pv.atribuicao, url: pv.url ? pv.url.split('/').slice(0, 3).join('/') : '' });
+        }
+      });
+    }
     return {
       modulo: 'GeoRegistro',
       versao: VERSAO,
@@ -817,7 +1163,9 @@
       armazenamento: Banco.modo(),
       cryptoHash: !!(global.crypto && global.crypto.subtle),
       online: nav.onLine !== false,
-      appId: CFG.appId
+      appId: CFG.appId,
+      mapaAtivo: !!CFG.mapa.ativo,
+      canvas: !!(global.document && global.document.createElement)
     };
   }
 
@@ -836,20 +1184,22 @@
       'Se aparecer "precisão baixa", vá para perto de uma janela ou área aberta e tente de novo, ou registre assim mesmo.',
       'Confira o endereço e a hora, escreva uma observação se quiser e toque em "Salvar".',
       'Os registros ficam guardados neste aparelho, neste navegador. Se você limpar os dados do navegador, eles são apagados: exporte uma cópia de vez em quando.',
-      'O endereço é obtido na internet. Sem internet, o registro é salvo só com as coordenadas e o endereço pode ser completado depois.'
+      'O endereço é obtido na internet. Sem internet, o registro é salvo só com as coordenadas e o endereço pode ser completado depois.',
+      'Se o app estiver com a imagem de mapa ligada, o registro também guarda um mapa com o ponto marcado e um círculo que mostra a margem de erro do GPS. Sem internet, a imagem fica pendente e é feita depois.'
     ],
     limitacoes: [
       'O registro é feito no próprio aparelho. O relógio e o GPS do aparelho podem ser alterados por quem o usa; por isso o registro é uma declaração do usuário acompanhada de indícios técnicos, e não uma prova absoluta.',
       'A conferência de hora na internet e o alerta de relógio divergente ajudam, mas não impedem fraude deliberada.',
       'O hash mostra se o registro foi alterado depois de salvo. Ele não garante que a hora e o local estavam corretos quando foi gerado.',
-      'Dentro de edifícios a margem de erro pode ser grande. O endereço pode vir incompleto ou aproximado.'
+      'Dentro de edifícios a margem de erro pode ser grande. O endereço pode vir incompleto ou aproximado.',
+      'A imagem do mapa é só uma ilustração do mesmo ponto de GPS: não aumenta o valor de prova do registro. O mapa de base pode estar desatualizado. O círculo azul mostra a margem de erro: o aparelho pode estar em qualquer lugar dentro dele.'
     ],
     privacidadeBase: 'MODELO-BASE, PRECISA DE REVISÃO JURÍDICA ANTES DE USO COM TERCEIROS. ' +
       'Este recurso coleta a localização do aparelho (latitude, longitude, margem de erro), a data e a hora, e o endereço correspondente, ' +
       'somente quando o usuário aciona o registro, para a finalidade de comprovar o local e o horário de uma atividade (por exemplo, vistoria ou visita comercial). ' +
       'Não há rastreamento contínuo. Os registros ficam armazenados no aparelho do usuário, que pode excluí-los a qualquer momento. ' +
       'Para obter o endereço e conferir a hora, as coordenadas e uma consulta de horário são enviadas a serviços externos de terceiros ' +
-      '(OpenStreetMap/Nominatim e fontes de hora na internet), que têm políticas próprias. ' +
+      '(OpenStreetMap/Nominatim, fontes de hora na internet e, se ativada, a imagem de mapa, que é montada a partir de trechos de mapa baixados do OpenStreetMap, cujo servidor recebe a região solicitada), que têm políticas próprias. ' +
       '[PENDENTE: identificação do responsável pelo tratamento, canal de contato do titular, base legal e prazo de guarda.]'
   };
 
@@ -864,15 +1214,19 @@
     excluir: excluir,
     verificarIntegridade: verificarIntegridade,
     completarEnderecosPendentes: completarEnderecosPendentes,
+    completarMapasPendentes: completarMapasPendentes,
+    completarPendentes: completarPendentes,
     exportarJSON: exportarJSON,
     baixarJSON: baixarJSON,
+    baixarImagemMapa: baixarImagemMapa,
+    compartilhar: compartilhar,
     textoResumo: textoResumo,
     linkMapa: linkMapa,
     creditos: creditos,
     diagnostico: diagnostico,
     estadoPermissao: estadoPermissao,
     textos: textos,
-    _interno: { montarTexto: montarTexto, canonico: canonico, resolverEndereco: resolverEndereco }  // usado nos testes
+    _interno: { montarTexto: montarTexto, canonico: canonico, resolverEndereco: resolverEndereco, escolherZoom: escolherZoom, mppAt: mppAt }  // usado nos testes
   };
 })(typeof self !== 'undefined' ? self : globalThis);
 
@@ -890,12 +1244,21 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  function htmlMapa(m) {
+    if (!m) return '<small>desativado</small>';
+    if (m.dataUrl) {
+      return '<img alt="Mapa do local" style="width:100%;border:1px solid #d0d7e2;border-radius:8px" src="' + esc(m.dataUrl) + '">' +
+        '<small>zoom ' + esc(m.zoom) + ' · ' + esc(m.atribuicao) + (m.posterior ? ' · gerada depois do registro' : '') + '</small>';
+    }
+    return '<span class="erro">não gerado (' + esc(m.erro || '') + ')</span> <small>(ficará pendente)</small>';
+  }
   function msgStatus(t, ehErro) { var e = $('status'); e.textContent = t || ''; e.className = 'status' + (ehErro ? ' erro' : ''); }
 
   function aplicarAjustes() {
     GeoRegistro.configurar({
       limitePrecisaoM: Math.max(5, Number($('limite').value) || 25),
-      provedores: { nominatim: { ativo: $('chkNom').checked }, bigdatacloud: { ativo: $('chkBdc').checked } }
+      provedores: { nominatim: { ativo: $('chkNom').checked }, bigdatacloud: { ativo: $('chkBdc').checked } },
+      mapa: { ativo: $('chkMapa').checked }
     });
   }
 
@@ -925,6 +1288,7 @@
     linhas.push(['Coordenadas', l.latitude.toFixed(6) + ', ' + l.longitude.toFixed(6)]);
     linhas.push(['Margem de erro', l.precisaoM + ' m' + (l.precisaoBaixa ? ' <b class="erro">— PRECISÃO BAIXA</b>' : '')]);
     linhas.push(['Mapa', '<a href="' + esc(GeoRegistro.linkMapa(r, 'google')) + '" target="_blank" rel="noopener">abrir no mapa</a>']);
+    linhas.push(['Imagem do mapa', htmlMapa(r.mapa)]);
     linhas.push(['Tentativas de endereço', e.tentativas.map(function (t) {
       return esc(t.provedor) + (t.ok ? ' ✔' : ' ✘ ' + esc(t.erro || ''));
     }).join(' · ') || '—']);
@@ -970,9 +1334,12 @@
       $('lista').innerHTML = rs.map(function (r) {
         return '<div class="item" data-id="' + esc(r.id) + '">' +
           '<b>' + esc(r.tipo) + '</b> · ' + esc(r.horario.dispositivoISO) +
+          (r.mapa && r.mapa.dataUrl ? '<div style="margin-top:6px">' + htmlMapa(r.mapa) + '</div>' : '') +
           '<pre>' + esc(GeoRegistro.textoResumo(r)) + '</pre>' +
           '<div class="linha">' +
           '<button class="sec" data-acao="copiar">Copiar resumo</button>' +
+          '<button class="sec" data-acao="baixar">Baixar imagem</button>' +
+          '<button class="sec" data-acao="compartilhar">Compartilhar</button>' +
           '<button class="sec" data-acao="verificar">Verificar integridade</button>' +
           '<button class="perigo" data-acao="excluir">Excluir</button>' +
           '<span class="status" data-res></span></div></div>';
@@ -995,6 +1362,12 @@
         GeoRegistro.verificarIntegridade(r).then(function (v) {
           res.textContent = v.ok ? 'Íntegro ✔' : 'ALTERADO ✘ (' + v.motivo + ')';
         });
+      } else if (acao === 'baixar') {
+        GeoRegistro.baixarImagemMapa(r).then(function (n) { res.textContent = 'Baixado: ' + n; }, function (e) { res.textContent = e.message; });
+      } else if (acao === 'compartilhar') {
+        GeoRegistro.compartilhar(r).then(function (x) {
+          res.textContent = x.ok ? 'Compartilhado' + (x.comImagem ? ' (com imagem)' : ' (só texto)') : 'Não compartilhado: ' + x.motivo;
+        });
       } else if (acao === 'excluir') {
         if (confirm('Excluir este registro deste aparelho?')) GeoRegistro.excluir(id).then(atualizarLista);
       }
@@ -1007,12 +1380,12 @@
   $('btnDescartar').addEventListener('click', function () { rascunho = null; $('resultado').hidden = true; msgStatus('Registro descartado.'); });
   $('btnAtualizar').addEventListener('click', atualizarLista);
   $('btnExportar').addEventListener('click', function () {
-    GeoRegistro.baixarJSON().then(function (n) { msgStatus('Arquivo gerado: ' + n); });
+    GeoRegistro.baixarJSON({ semImagens: $('chkSemImg').checked }).then(function (n) { msgStatus('Arquivo gerado: ' + n); });
   });
   $('btnPendentes').addEventListener('click', function () {
     aplicarAjustes();
-    GeoRegistro.completarEnderecosPendentes().then(function (r) {
-      msgStatus('Pendentes: ' + r.pendentes + ' · completados: ' + r.completados);
+    GeoRegistro.completarPendentes().then(function (r) {
+      msgStatus('Endereços: ' + r.enderecos.completados + '/' + r.enderecos.pendentes + ' · Mapas: ' + r.mapas.completados + '/' + r.mapas.pendentes);
       atualizarLista();
     });
   });
