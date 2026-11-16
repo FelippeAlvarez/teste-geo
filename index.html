@@ -86,6 +86,7 @@
       <button class="sec" id="btnPendentes">Completar pendentes (endereço e mapa)</button>
       <button class="sec" id="btnAtualizar">Atualizar lista</button>
     </div>
+    <div class="status" id="msgLista" role="status"></div>
     <div id="lista"></div>
   </div>
 
@@ -1577,6 +1578,7 @@
     }
     return '<span class="erro">não gerado (' + esc(m.erro || '') + ')</span> <small>(ficará pendente)</small>';
   }
+  function msgL(t, ehErro) { var e = $('msgLista'); e.textContent = t || ''; e.className = 'status' + (ehErro ? ' erro' : ''); }
   function msgStatus(t, ehErro) { var e = $('status'); e.textContent = t || ''; e.className = 'status' + (ehErro ? ' erro' : ''); }
 
   function aplicarAjustes() {
@@ -1711,22 +1713,29 @@
   $('btnRepetir').addEventListener('click', registrar);
   $('btnSalvar').addEventListener('click', salvar);
   $('btnDescartar').addEventListener('click', function () { rascunho = null; $('resultado').hidden = true; msgStatus('Registro descartado.'); });
-  $('btnAtualizar').addEventListener('click', atualizarLista);
+  $('btnAtualizar').addEventListener('click', function () {
+    atualizarLista();
+    GeoRegistro.listar().then(function (rs) { msgL('Lista atualizada: ' + rs.length + ' registro(s).'); });
+  });
   $('btnExportar').addEventListener('click', function () {
-    GeoRegistro.baixarJSON({ semImagens: $('chkSemImg').checked }).then(function (n) { msgStatus('Arquivo gerado: ' + n); });
+    GeoRegistro.baixarJSON({ semImagens: $('chkSemImg').checked }).then(function (n) { msgL('Arquivo gerado: ' + n); }, function (e) { msgL(e.message || 'Falha ao exportar.', true); });
   });
   $('btnPdfTodos').addEventListener('click', function () {
     GeoRegistro.listar().then(function (rs) {
-      if (!rs.length) { msgStatus('Não há registros para o PDF.', true); return; }
-      return GeoRegistro.baixarPDF(rs).then(function (n) { msgStatus('PDF gerado: ' + n + ' (' + rs.length + ' página(s))'); });
-    });
+      if (!rs.length) { msgL('Não há registros salvos para gerar o PDF.', true); return; }
+      msgL('Gerando PDF…');
+      return GeoRegistro.baixarPDF(rs).then(function (n) { msgL('PDF gerado: ' + n + ' (' + rs.length + ' página(s))'); });
+    }).catch(function (e) { msgL(e.message || 'Falha ao gerar o PDF.', true); });
   });
   $('btnPendentes').addEventListener('click', function () {
     aplicarAjustes();
+    msgL('Verificando pendências…');
     GeoRegistro.completarPendentes().then(function (r) {
-      msgStatus('Endereços: ' + r.enderecos.completados + '/' + r.enderecos.pendentes + ' · Mapas: ' + r.mapas.completados + '/' + r.mapas.pendentes);
+      var n = r.enderecos.pendentes + r.mapas.pendentes;
+      msgL(n ? 'Endereços: ' + r.enderecos.completados + '/' + r.enderecos.pendentes + ' · Mapas: ' + r.mapas.completados + '/' + r.mapas.pendentes
+             : 'Não há pendências: nenhum registro aguarda endereço ou mapa.');
       atualizarLista();
-    });
+    }).catch(function (e) { msgL(e.message || 'Falha ao completar pendências.', true); });
   });
 
   $('versao').textContent = 'v' + GeoRegistro.VERSAO;
