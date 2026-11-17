@@ -5,37 +5,79 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Teste — Registro de Local e Hora</title>
 <style>
-  :root { --cor: #1f5fbf; --borda: #d0d7e2; --fundo: #f5f7fb; }
+  :root {
+    --azul: #0f2742; --azul2: #16406b; --dest: #14b8a6; --dest2: #0d9488; --dest-txt: #042f2b;
+    --fundo: #f4f7fb; --cartao: #ffffff; --borda: #d6dfeb; --texto: #0f2742; --suave: #64748b; --campo: #ffffff;
+    --chip-ok-bg: #dcfce7; --chip-ok: #14532d; --chip-info-bg: #e0ecff; --chip-info: #1e3a8a; --chip-mut-bg: #eef2f7; --chip-mut: #475569;
+    --link: #1d4ed8; --sec-bg: #e9eef6; --sec-txt: #0f2742; --pre: #f0f3f9; --aviso-bg: #fff6e0; --aviso-borda: #f0d58a; --erro: #b42318; --sombra: 0 2px 10px rgba(15,39,66,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fundo: #0b1522; --cartao: #12202f; --borda: #1e3148; --texto: #e8eef7; --suave: #8da2bd; --campo: #0e1b2a;
+      --chip-ok-bg: #12351f; --chip-ok: #86efac; --chip-info-bg: #14305a; --chip-info: #bcd3ff; --chip-mut-bg: #1b2c40; --chip-mut: #a9bcd3;
+      --link: #7db4ff; --sec-bg: #1b2c40; --sec-txt: #e8eef7; --pre: #0e1b2a; --aviso-bg: #2b2410; --aviso-borda: #5c4a14; --erro: #ff9b92; --sombra: none;
+    }
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--fundo); color: #1b2330; }
-  main { max-width: 640px; margin: 0 auto; padding: 16px; }
-  h1 { font-size: 1.25rem; margin: 0 0 4px; }
-  h2 { font-size: 1.05rem; margin: 0 0 8px; }
-  .sub { color: #5a6678; font-size: .85rem; margin-bottom: 14px; }
-  .card { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
-  label { display: block; font-size: .85rem; margin: 8px 0 3px; color: #3a4658; }
-  input[type=text], input[type=number], select, textarea { width: 100%; padding: 9px; border: 1px solid var(--borda); border-radius: 8px; font: inherit; }
-  button { font: inherit; border: 0; border-radius: 8px; padding: 10px 14px; background: var(--cor); color: #fff; cursor: pointer; }
-  button.sec { background: #e8edf6; color: #1b2330; }
-  button.perigo { background: #f6e3e3; color: #8a1f1f; }
+  body { margin: 0; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--fundo); color: var(--texto); line-height: 1.45; }
+  .topo { background: linear-gradient(160deg, var(--azul), var(--azul2)); color: #fff; padding: 18px 20px 28px; border-radius: 0 0 28px 28px; }
+  .topo .in { max-width: 640px; margin: 0 auto; }
+  .marca { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 44px; height: 44px; border-radius: 13px; background: var(--dest); display: grid; place-items: center; color: var(--dest-txt); flex: none; }
+  .marca b { font-size: 1.2rem; letter-spacing: -.2px; display: block; }
+  .marca span.s { font-size: .8rem; color: #b9cbe0; }
+  main { max-width: 640px; margin: -14px auto 0; padding: 0 16px 24px; }
+  h2 { font-size: .78rem; margin: 0 0 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--suave); }
+  .card { background: var(--cartao); border: 1px solid var(--borda); border-radius: 20px; padding: 16px; margin-bottom: 14px; box-shadow: var(--sombra); }
+  label { display: block; font-size: .85rem; margin: 10px 0 4px; color: var(--suave); }
+  label.chk { display: flex; gap: 8px; align-items: flex-start; color: var(--texto); }
+  label.chk input { margin-top: 3px; }
+  input[type=text], input[type=number], select, textarea { width: 100%; padding: 11px 12px; border: 1.5px solid var(--borda); border-radius: 12px; font: inherit; background: var(--campo); color: var(--texto); }
+  input:focus, select:focus, textarea:focus, button:focus-visible { outline: 3px solid rgba(20,184,166,.45); outline-offset: 1px; }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 14px; padding: 11px 16px; background: var(--azul); color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+  button svg { flex: none; }
+  button.sec { background: var(--sec-bg); color: var(--sec-txt); border: 1.5px solid var(--borda); }
+  button.perigo { background: transparent; color: var(--erro); border: 1.5px solid var(--borda); }
   button:disabled { opacity: .5; cursor: default; }
-  .grande { width: 100%; font-size: 1.05rem; padding: 14px; }
-  .linha { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-  .status { margin-top: 10px; font-size: .9rem; color: #3a4658; min-height: 1.3em; }
-  .erro { color: #8a1f1f; }
-  .aviso { background: #fff6e0; border: 1px solid #f0d58a; border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: .85rem; }
-  dl { margin: 0; display: grid; grid-template-columns: 8.5rem 1fr; gap: 4px 8px; font-size: .88rem; }
-  dt { color: #5a6678; } dd { margin: 0; word-break: break-word; }
-  .item { border-top: 1px solid var(--borda); padding-top: 10px; margin-top: 10px; }
-  pre { white-space: pre-wrap; font-size: .8rem; background: #f0f3f9; padding: 8px; border-radius: 8px; margin: 6px 0 0; }
-  small { color: #5a6678; }
+  .grande { width: 100%; font-size: 1.1rem; padding: 18px; border-radius: 18px; background: linear-gradient(180deg, var(--dest), var(--dest2)); color: var(--dest-txt); box-shadow: 0 8px 18px rgba(13,148,136,.35); }
+  .linha { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .status { margin-top: 10px; font-size: .9rem; color: var(--suave); min-height: 1.3em; }
+  .erro { color: var(--erro); }
+  .aviso { background: var(--aviso-bg); border: 1px solid var(--aviso-borda); border-radius: 12px; padding: 9px 12px; margin: 12px 0 0; font-size: .82rem; }
+  dl { margin: 0; display: grid; grid-template-columns: 8.5rem 1fr; gap: 0; font-size: .88rem; border: 1px solid var(--borda); border-radius: 12px; overflow: hidden; }
+  dt, dd { padding: 8px 10px; margin: 0; }
+  dt { color: var(--suave); font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; font-weight: 700; padding-top: 10px; }
+  dd { word-break: break-word; }
+  dt:nth-of-type(odd), dt:nth-of-type(odd) + dd { background: var(--pre); }
+  .item { border-top: 1px solid var(--borda); padding-top: 12px; margin-top: 12px; }
+  pre { white-space: pre-wrap; font-size: .8rem; background: var(--pre); padding: 10px; border-radius: 12px; margin: 8px 0 0; font-family: ui-monospace, "DejaVu Sans Mono", monospace; }
+  small { color: var(--suave); }
+  a { color: var(--link); }
   details summary { cursor: pointer; font-weight: 600; }
+  .destaque { margin-bottom: 12px; }
+  .destaque .hora { font-size: 2.1rem; font-weight: 700; letter-spacing: -1px; line-height: 1.1; }
+  .destaque .hora small { font-size: 1.1rem; font-weight: 600; letter-spacing: 0; }
+  .destaque .data { color: var(--suave); font-size: .85rem; margin: 2px 0 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; font-weight: 600; padding: 5px 10px; border-radius: 999px; background: var(--chip-mut-bg); color: var(--chip-mut); }
+  .chip.ok { background: var(--chip-ok-bg); color: var(--chip-ok); } .chip.info { background: var(--chip-info-bg); color: var(--chip-info); } .chip.bad { background: #fde4e1; color: #7a1d14; }
+  .radar { position: relative; width: 150px; height: 150px; margin: 14px auto 0; display: grid; place-items: center; }
+  .radar[hidden] { display: none; }
+  .radar span { position: absolute; border: 2px solid var(--dest); border-radius: 50%; opacity: 0; animation: onda 2.4s ease-out infinite; width: 56px; height: 56px; }
+  .radar span:nth-child(2) { animation-delay: .8s; } .radar span:nth-child(3) { animation-delay: 1.6s; }
+  .radar i { position: relative; width: 56px; height: 56px; border-radius: 50%; background: var(--azul); color: #fff; display: grid; place-items: center; }
+  @keyframes onda { 0% { transform: scale(1); opacity: .9; } 100% { transform: scale(2.6); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .radar span { animation: none; opacity: .35; } .radar span:nth-child(2) { transform: scale(1.6); } .radar span:nth-child(3) { transform: scale(2.2); } }
+  .barra { height: 9px; border-radius: 99px; background: var(--chip-mut-bg); overflow: hidden; margin-top: 8px; }
+  .barra[hidden] { display: none; }
+  .barra div { height: 100%; width: 0; background: linear-gradient(90deg, var(--dest), var(--dest2)); transition: width .4s; }
+  .rodape { text-align: center; color: var(--suave); font-size: .78rem; padding: 6px 16px 26px; }
+  #diag { margin-top: 0; }
 </style>
 </head>
 <body>
+<header class="topo"><div class="in"><div class="marca"><span class="logo" data-ico="pin" data-s="26"></span><div><b>GeoRegistro</b><span class="s">Registro de local e hora · motor <span id="versao"></span></span></div></div></div></header>
 <main>
-  <h1>Registro de Local e Hora — página de teste</h1>
-  <div class="sub">Motor GeoRegistro <span id="versao"></span> · esta página só serve para testar o motor. Cada app usará o próprio visual.</div>
 
   <div class="card">
     <h2>Condições deste aparelho</h2>
@@ -51,19 +93,22 @@
       <option value="teste">Teste</option>
     </select>
     <div class="aviso" id="aviso"></div>
-    <div class="linha"><button class="grande" id="btnRegistrar">📍 Registrar local e hora</button></div>
-    <div class="status" id="status"></div>
+    <div class="linha"><button class="grande" id="btnRegistrar" data-ico="pin" data-s="24"> Registrar local e hora</button></div>
+    <div class="radar" id="radar" hidden><span></span><span></span><span></span><i data-ico="pin" data-s="24"></i></div>
+    <div class="barra" id="barraWrap" hidden><div id="barra"></div></div>
+    <div class="status" id="status" role="status"></div>
 
     <div id="resultado" hidden>
       <hr style="border:0;border-top:1px solid var(--borda);margin:12px 0">
+      <div class="destaque" id="destaque"></div>
       <dl id="dados"></dl>
       <label for="obs">Observação (campo livre)</label>
       <textarea id="obs" rows="2" placeholder="Ex.: nome do cliente, unidade vistoriada…"></textarea>
       <div class="linha">
-        <button id="btnSalvar">Salvar registro</button>
-        <button class="sec" id="btnPdfAgora">Baixar PDF</button>
-        <button class="sec" id="btnPdfCompAgora">Compartilhar PDF</button>
-        <button class="sec" id="btnDescartar">Descartar</button>
+        <button id="btnSalvar" data-ico="ck"> Salvar registro</button>
+        <button class="sec" id="btnPdfAgora" data-ico="dl"> Baixar PDF</button>
+        <button class="sec" id="btnPdfCompAgora" data-ico="sh"> Compartilhar PDF</button>
+        <button class="perigo" id="btnDescartar">Descartar</button>
         <button class="sec" id="btnRepetir">Tentar de novo</button>
       </div>
       <div class="status" id="msgResultado" role="status"></div>
@@ -74,9 +119,9 @@
     <h2>Ajustes de teste</h2>
     <label for="limite">Limite de precisão (metros)</label>
     <input type="number" id="limite" value="25" min="5" max="500">
-    <label><input type="checkbox" id="chkBdc"> Ativar BigDataCloud como 2º provedor (só localidade; termos ainda a verificar)</label>
-    <label><input type="checkbox" id="chkNom" checked> Ativar Nominatim (OpenStreetMap)</label>
-    <label><input type="checkbox" id="chkMapa" checked> Gerar imagem do mapa (OpenStreetMap)</label>
+    <label class="chk"><input type="checkbox" id="chkBdc"> Ativar BigDataCloud como 2º provedor (só localidade; termos ainda a verificar)</label>
+    <label class="chk"><input type="checkbox" id="chkNom" checked> Ativar Nominatim (OpenStreetMap)</label>
+    <label class="chk"><input type="checkbox" id="chkMapa" checked> Gerar imagem do mapa (OpenStreetMap)</label>
     <small>Para simular falha do 1º provedor e ver a troca automática, desmarque o Nominatim e marque o BigDataCloud.</small>
   </div>
 
@@ -84,8 +129,8 @@
     <h2>Registros salvos neste aparelho</h2>
     <div class="linha" style="margin-top:0">
       <button class="sec" id="btnExportar">Exportar JSON</button>
-      <button class="sec" id="btnPdfTodos">PDF de todos</button>
-      <label style="display:inline-block;margin:8px 0 0"><input type="checkbox" id="chkSemImg"> sem imagens</label>
+      <button class="sec" id="btnPdfTodos" data-ico="dc"> PDF de todos</button>
+      <label class="chk" style="margin:0;align-items:center"><input type="checkbox" id="chkSemImg" style="margin:0"> sem imagens</label>
       <button class="sec" id="btnPendentes">Completar pendentes (endereço e mapa)</button>
       <button class="sec" id="btnAtualizar">Atualizar lista</button>
     </div>
@@ -100,11 +145,12 @@
     </details>
   </div>
 </main>
+<div class="rodape">© 2026 Felippe Alvarez · GeoRegistro · página de teste do motor (cada app usará o próprio visual)</div>
 
 <script>
 /*!
  * GeoRegistro — motor de registro de local (GPS), endereço e horário
- * Versão 1.2.0
+ * Versão 1.3.0
  * Copyright © 2026 Felippe Alvarez. Todos os direitos reservados.
  * (Licença de distribuição a terceiros: PENDENTE de definição.)
  *
@@ -173,7 +219,7 @@
 (function (global) {
   'use strict';
 
-  var VERSAO = '1.2.0';
+  var VERSAO = '1.3.0';
   var ESQUEMA = 1;
 
   // ---------------------------------------------------------------- configuração
@@ -183,6 +229,13 @@
     tempoMaxMs: 25000,              // tempo máximo esperando o GPS melhorar
     limiteDiferencaRelogioSeg: 120, // acima disto: alerta de relógio divergente
     timeoutProvedorMs: 6000,        // tempo máximo por consulta externa
+    pdf: {                          // aparência do PDF (cada app pode trocar)
+      titulo: 'REGISTRO DE LOCAL E HORA',
+      corPrincipal: '#0f2742',      // faixa do cabeçalho
+      corDestaque: '#14b8a6',       // detalhes (logotipo, borda do selo, QR)
+      rodape: '© 2026 Felippe Alvarez',
+      qrCode: true                  // QR code que abre o local no mapa
+    },
     contatoNominatim: '',           // e-mail opcional de contato (boa prática da política do Nominatim)
     ordemEndereco: ['nominatim', 'bigdatacloud', 'locationiq'],
     provedores: {
@@ -1220,148 +1273,348 @@
     return u;
   }
 
-  // Monta uma página A4 para o registro. Devolve o conteúdo, a imagem (se houver) e os links.
-  function paginaPdf(reg, n, total) {
-    var PW = 595, PH = 842, M = 42, CW = PW - 2 * M;
-    var ops = [], links = [], imagem = null;
-    var tx = global.GeoRegistro ? global.GeoRegistro.textos : textos;
-    function Y(yTop) { return (PH - yTop).toFixed(2); }
-    function cor(r, g, b) { ops.push(r + ' ' + g + ' ' + b + ' rg'); }
-    function ret(x, yTop, w, h) { ops.push(x.toFixed(2) + ' ' + Y(yTop + h) + ' ' + w.toFixed(2) + ' ' + h.toFixed(2) + ' re f'); }
-    function txt(x, yTop, str, tam, fonte) {
-      ops.push('BT /' + fonte + ' ' + tam + ' Tf ' + x.toFixed(2) + ' ' + Y(yTop) + ' Td (' + escPdf(str) + ') Tj ET');
+  // ---------------------------------------------------------------- QR code (gerador próprio, nível M, versões 1 a 10)
+  var QR_VERSOES = {
+    1: [16, 10, [[1, 16]]], 2: [28, 16, [[1, 28]]], 3: [44, 26, [[1, 44]]], 4: [64, 18, [[2, 32]]], 5: [86, 24, [[2, 43]]],
+    6: [108, 16, [[4, 27]]], 7: [124, 18, [[4, 31]]], 8: [154, 22, [[2, 38], [2, 39]]], 9: [182, 22, [[3, 36], [2, 37]]], 10: [216, 26, [[4, 43], [1, 44]]]
+  };
+  var QR_ALINH = { 1: [], 2: [6, 18], 3: [6, 22], 4: [6, 26], 5: [6, 30], 6: [6, 34], 7: [6, 22, 38], 8: [6, 24, 42], 9: [6, 26, 46], 10: [6, 28, 50] };
+  var GF_EXP = [], GF_LOG = [];
+  (function () { var x = 1; for (var i = 0; i < 255; i++) { GF_EXP[i] = x; GF_LOG[x] = i; x <<= 1; if (x & 256) x ^= 0x11D; } for (i = 255; i < 512; i++) GF_EXP[i] = GF_EXP[i - 255]; })();
+  function gfMul(a, b) { return (a === 0 || b === 0) ? 0 : GF_EXP[GF_LOG[a] + GF_LOG[b]]; }
+  function rsResto(dados, n) {
+    var g = [1];
+    for (var i = 0; i < n; i++) {
+      var ng = new Array(g.length + 1).fill(0);
+      for (var j = 0; j < g.length; j++) { ng[j] ^= g[j]; ng[j + 1] ^= gfMul(g[j], GF_EXP[i]); }
+      g = ng;
     }
-
-    var h = reg.horario, l = reg.localizacao, e = reg.endereco || {};
-    var y = 0;
-
-    // faixa de título
-    cor(0.12, 0.23, 0.37); ret(0, 0, PW, 64);
-    cor(1, 1, 1);
-    txt(M, 30, cp1252('REGISTRO DE LOCAL E HORA'), 17, 'F2');
-    txt(M, 49, cp1252('Tipo: ' + reg.tipo + '   ·   App: ' + reg.appId), 9.5, 'F1');
-    var pag = cp1252('Página ' + n + ' de ' + total);
-    txt(PW - M - largTxt(pag, 9.5, false), 49, pag, 9.5, 'F1');
-    y = 90;
-
-    var VX = M + 122, VW = CW - 122;
-    function campo(rotulo, linhasValor, o) {
-      o = o || {};
-      var tam = o.tam || 10.5, fonte = o.mono ? 'F3' : 'F1', passo = tam + 3.5;
-      if (rotulo) { cor(0.35, 0.4, 0.47); txt(M, y, cp1252(rotulo), 8.5, 'F2'); }
-      linhasValor.forEach(function (ln, i) {
-        if (o.vermelho) cor(0.7, 0.1, 0.1); else if (o.cinza) cor(0.4, 0.44, 0.5); else cor(0.1, 0.12, 0.16);
-        txt(VX, y + i * passo, ln, tam, fonte);
-      });
-      y += Math.max(1, linhasValor.length) * passo + 5;
-    }
-    function q(t, tam, negrito) { return quebrarLinhas(t, tam || 10.5, VW, negrito); }
-
-    campo('Data e hora (aparelho)', q(formatarData(reg) + ' (' + utcTexto(h.fusoOffsetMin) + ')'));
-
-    if (h.referencia) {
-      var d = h.diferencaSeg;
-      campo('Conferência de hora', q('Conferida na internet (' + h.referencia.fonte + '): diferença de ' + (d > 0 ? '+' : '') + String(d).replace('.', ',') + ' s em relação ao relógio do aparelho.'));
-    } else {
-      campo('Conferência de hora', q('Não conferida na internet: a hora é a informada pelo relógio do aparelho.'));
-    }
-    if (h.alertaRelogio) campo('', q('ALERTA: relógio do aparelho divergente da hora da internet.'), { vermelho: true });
-
-    if (e.texto) {
-      campo('Local (endereço)', q(e.texto));
-      campo('', q('Fonte: ' + e.provedor + (e.aproximado ? ' · endereço aproximado' : '') + (e.posterior ? ' · obtido depois do registro' : ''), 8.5), { tam: 8.5, cinza: true });
-    } else {
-      campo('Local (endereço)', q('Endereço não obtido (somente coordenadas).'));
-    }
-    campo('Coordenadas', [cp1252(l.latitude.toFixed(6) + ', ' + l.longitude.toFixed(6))]);
-    campo('Margem de erro', q('cerca de ' + String(l.precisaoM).replace('.', ',') + ' m' + (l.precisaoBaixa ? '  —  PRECISÃO BAIXA' : '')), { vermelho: !!l.precisaoBaixa });
-
-    // link do mapa, clicável
-    var url = linkMapa(reg, 'google');
-    var ul = quebrarLinhas(url, 8.5, VW, false);
-    cor(0.35, 0.4, 0.47); txt(M, y, cp1252('Mapa (link)'), 8.5, 'F2');
-    cor(0.1, 0.3, 0.7);
-    ul.forEach(function (ln, i) {
-      var yy = y + i * 12;
-      txt(VX, yy, ln, 8.5, 'F1');
-      links.push({ x1: VX, y1: PH - (yy + 3), x2: VX + largTxt(ln, 8.5, false), y2: PH - (yy - 8), uri: url });
+    var r = new Array(n).fill(0);
+    dados.forEach(function (d) {
+      var f = d ^ r[0];
+      r.shift(); r.push(0);
+      for (var k = 0; k < n; k++) r[k] ^= gfMul(g[k + 1], f);
     });
-    y += ul.length * 12 + 5;
+    return r;
+  }
 
+  // Devolve uma matriz de booleanos (true = módulo escuro) ou null se o texto não couber.
+  function qrMatriz(texto) {
+    var bytes = [];
+    unescape(encodeURIComponent(texto)).split('').forEach(function (c) { bytes.push(c.charCodeAt(0)); });
+    var v = 0, i, j;
+    for (i = 1; i <= 10; i++) {
+      if (4 + (i < 10 ? 8 : 16) + 8 * bytes.length <= QR_VERSOES[i][0] * 8) { v = i; break; }
+    }
+    if (!v) return null;
+    var info = QR_VERSOES[v], totalDados = info[0], nEc = info[1], blocosDef = info[2];
+    var bits = [];
+    function pb(val, n) { for (var k = n - 1; k >= 0; k--) bits.push((val >>> k) & 1); }
+    pb(4, 4); pb(bytes.length, v < 10 ? 8 : 16);
+    bytes.forEach(function (b) { pb(b, 8); });
+    for (i = 0; i < 4 && bits.length < totalDados * 8; i++) bits.push(0);
+    while (bits.length % 8) bits.push(0);
+    for (i = 0; bits.length < totalDados * 8; i++) pb(i % 2 === 0 ? 0xEC : 0x11, 8);
+    var cw = [];
+    for (i = 0; i < bits.length; i += 8) { var by = 0; for (j = 0; j < 8; j++) by = (by << 1) | bits[i + j]; cw.push(by); }
+    var blocos = [], pos = 0;
+    blocosDef.forEach(function (d) { for (var k = 0; k < d[0]; k++) { blocos.push(cw.slice(pos, pos + d[1])); pos += d[1]; } });
+    var ecs = blocos.map(function (b) { return rsResto(b, nEc); });
+    var final = [], maxLen = Math.max.apply(null, blocos.map(function (b) { return b.length; }));
+    for (i = 0; i < maxLen; i++) blocos.forEach(function (b) { if (i < b.length) final.push(b[i]); });
+    for (i = 0; i < nEc; i++) ecs.forEach(function (e) { final.push(e[i]); });
+
+    var n = 17 + 4 * v, m = [], fn = [];
+    for (i = 0; i < n; i++) { m.push(new Array(n).fill(false)); fn.push(new Array(n).fill(false)); }
+    function setF(x, y, val) { if (x >= 0 && y >= 0 && x < n && y < n) { m[y][x] = !!val; fn[y][x] = true; } }
+    for (i = 0; i < n; i++) { setF(6, i, i % 2 === 0); setF(i, 6, i % 2 === 0); }
+    [[3, 3], [n - 4, 3], [3, n - 4]].forEach(function (c) {
+      for (var dy = -4; dy <= 4; dy++) for (var dx = -4; dx <= 4; dx++) { var d = Math.max(Math.abs(dx), Math.abs(dy)); setF(c[0] + dx, c[1] + dy, d !== 2 && d !== 4); }
+    });
+    var al = QR_ALINH[v];
+    al.forEach(function (ay) { al.forEach(function (ax) {
+      if ((ax === 6 && ay === 6) || (ax === 6 && ay === al[al.length - 1]) || (ax === al[al.length - 1] && ay === 6)) return;
+      for (var dy = -2; dy <= 2; dy++) for (var dx = -2; dx <= 2; dx++) setF(ax + dx, ay + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+    }); });
+    function formato(mask) {
+      var data = mask, rem = data, k;       // nível M = 00
+      for (k = 0; k < 10; k++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+      var b = ((data << 10) | rem) ^ 0x5412;
+      function gb(x) { return ((b >>> x) & 1) !== 0; }
+      for (k = 0; k <= 5; k++) setF(8, k, gb(k));
+      setF(8, 7, gb(6)); setF(8, 8, gb(7)); setF(7, 8, gb(8));
+      for (k = 9; k < 15; k++) setF(14 - k, 8, gb(k));
+      for (k = 0; k < 8; k++) setF(n - 1 - k, 8, gb(k));
+      for (k = 8; k < 15; k++) setF(8, n - 15 + k, gb(k));
+      setF(8, n - 8, true);
+    }
+    formato(0);
+    if (v >= 7) {
+      var rem = v, k;
+      for (k = 0; k < 12; k++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1F25);
+      var vb = (v << 12) | rem;
+      for (k = 0; k < 18; k++) { var bit = ((vb >>> k) & 1) !== 0, a = n - 11 + (k % 3), b2 = Math.floor(k / 3); setF(a, b2, bit); setF(b2, a, bit); }
+    }
+    var idx = 0, total = final.length * 8;
+    for (var right = n - 1; right >= 1; right -= 2) {
+      if (right === 6) right = 5;
+      for (var vert = 0; vert < n; vert++) for (j = 0; j < 2; j++) {
+        var x = right - j, up = ((right + 1) & 2) === 0, y = up ? n - 1 - vert : vert;
+        if (!fn[y][x] && idx < total) { m[y][x] = ((final[idx >>> 3] >>> (7 - (idx & 7))) & 1) !== 0; idx++; }
+      }
+    }
+    function aplica(mask) {
+      for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+        if (fn[y][x]) continue;
+        var inv;
+        switch (mask) {
+          case 0: inv = (x + y) % 2 === 0; break;
+          case 1: inv = y % 2 === 0; break;
+          case 2: inv = x % 3 === 0; break;
+          case 3: inv = (x + y) % 3 === 0; break;
+          case 4: inv = (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0; break;
+          case 5: inv = (x * y) % 2 + (x * y) % 3 === 0; break;
+          case 6: inv = ((x * y) % 2 + (x * y) % 3) % 2 === 0; break;
+          default: inv = ((x + y) % 2 + (x * y) % 3) % 2 === 0;
+        }
+        if (inv) m[y][x] = !m[y][x];
+      }
+    }
+    function penal() {
+      var p = 0, y, x, run, c, dark = 0;
+      for (y = 0; y < n; y++) {
+        run = 1;
+        for (x = 1; x < n; x++) { if (m[y][x] === m[y][x - 1]) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else run = 1; }
+      }
+      for (x = 0; x < n; x++) {
+        run = 1;
+        for (y = 1; y < n; y++) { if (m[y][x] === m[y - 1][x]) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else run = 1; }
+      }
+      for (y = 0; y < n - 1; y++) for (x = 0; x < n - 1; x++) { c = m[y][x]; if (c === m[y][x + 1] && c === m[y + 1][x] && c === m[y + 1][x + 1]) p += 3; }
+      for (y = 0; y < n; y++) for (x = 0; x < n; x++) if (m[y][x]) dark++;
+      p += Math.floor(Math.abs(dark * 20 - n * n * 10) / (n * n)) * 10;
+      return p;
+    }
+    var melhor = 0, melhorP = Infinity;
+    for (var mk = 0; mk < 8; mk++) {
+      aplica(mk); formato(mk);
+      var pp = penal();
+      if (pp < melhorP) { melhorP = pp; melhor = mk; }
+      aplica(mk);                       // desfaz a máscara (a operação é uma inversão)
+    }
+    aplica(melhor); formato(melhor);
+    return m;
+  }
+
+  function corHex(h) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(String(h || ''));
+    if (!m) return [0.06, 0.15, 0.26];
+    var n = parseInt(m[1], 16);
+    return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  }
+
+  // Monta uma página A4 para o registro (v = resultado de verificarIntegridade).
+  function paginaPdf(reg, n, total, v) {
+    var PW = 595, PH = 842, M = 42, CW = PW - 2 * M;
+    var T = CFG.pdf || {};
+    var cP = corHex(T.corPrincipal), cD = corHex(T.corDestaque);
+    var ops = [], links = [], imagem = null;
+    var tx = textos;
+    function Y(yTop) { return (PH - yTop).toFixed(2); }
+    function f2(x) { return x.toFixed(2); }
+    function cor(c) { ops.push(f2(c[0]) + ' ' + f2(c[1]) + ' ' + f2(c[2]) + ' rg'); }
+    function corTr(c, w) { ops.push(f2(c[0]) + ' ' + f2(c[1]) + ' ' + f2(c[2]) + ' RG ' + w + ' w'); }
+    function ret(x, yTop, w, h) { ops.push(f2(x) + ' ' + Y(yTop + h) + ' ' + f2(w) + ' ' + f2(h) + ' re f'); }
+    function rr(x, yTop, w, h, r, modo) {      // retângulo arredondado; modo: 'f', 'S' ou 'B'
+      var x0 = x, y0 = PH - (yTop + h), k = 0.5523 * r;
+      ops.push([f2(x0 + r), f2(y0), 'm', f2(x0 + w - r), f2(y0), 'l',
+        f2(x0 + w - r + k), f2(y0), f2(x0 + w), f2(y0 + r - k), f2(x0 + w), f2(y0 + r), 'c',
+        f2(x0 + w), f2(y0 + h - r), 'l',
+        f2(x0 + w), f2(y0 + h - r + k), f2(x0 + w - r + k), f2(y0 + h), f2(x0 + w - r), f2(y0 + h), 'c',
+        f2(x0 + r), f2(y0 + h), 'l',
+        f2(x0 + r - k), f2(y0 + h), f2(x0), f2(y0 + h - r + k), f2(x0), f2(y0 + h - r), 'c',
+        f2(x0), f2(y0 + r), 'l',
+        f2(x0), f2(y0 + r - k), f2(x0 + r - k), f2(y0), f2(x0 + r), f2(y0), 'c', 'h', modo].join(' '));
+    }
+    function circ(cx, cyTop, r) {
+      var y0 = PH - cyTop, k = 0.5523 * r;
+      ops.push([f2(cx + r), f2(y0), 'm',
+        f2(cx + r), f2(y0 + k), f2(cx + k), f2(y0 + r), f2(cx), f2(y0 + r), 'c',
+        f2(cx - k), f2(y0 + r), f2(cx - r), f2(y0 + k), f2(cx - r), f2(y0), 'c',
+        f2(cx - r), f2(y0 - k), f2(cx - k), f2(y0 - r), f2(cx), f2(y0 - r), 'c',
+        f2(cx + k), f2(y0 - r), f2(cx + r), f2(y0 - k), f2(cx + r), f2(y0), 'c h f'].join(' '));
+    }
+    function pino(cx, cyTop, s, cPino, cBuraco) {   // pino de mapa desenhado em vetor
+      var py = PH - cyTop, r = s * 0.42, cy = py + s * 0.12, ponta = py - s * 0.62, h = cy - ponta;
+      cor(cPino);
+      ops.push([f2(cx), f2(ponta), 'm',
+        f2(cx - r * 0.3), f2(ponta + h * 0.35), f2(cx - r), f2(cy - r * 0.45), f2(cx - r), f2(cy), 'c',
+        f2(cx - r), f2(cy + r * 0.55), f2(cx - r * 0.55), f2(cy + r), f2(cx), f2(cy + r), 'c',
+        f2(cx + r * 0.55), f2(cy + r), f2(cx + r), f2(cy + r * 0.55), f2(cx + r), f2(cy), 'c',
+        f2(cx + r), f2(cy - r * 0.45), f2(cx + r * 0.3), f2(ponta + h * 0.35), f2(cx), f2(ponta), 'c h f'].join(' '));
+      cor(cBuraco); circ(cx, PH - cy, r * 0.42);
+    }
+    function txt(x, yTop, str, tam, fonte) {
+      ops.push('BT /' + fonte + ' ' + tam + ' Tf ' + f2(x) + ' ' + Y(yTop) + ' Td (' + escPdf(str) + ') Tj ET');
+    }
+    function centro(x, w, yTop, str, tam, fonte, neg) { txt(x + (w - largTxt(str, tam, neg)) / 2, yTop, str, tam, fonte); }
+    var CINZA = [0.35, 0.4, 0.47], CINZA2 = [0.4, 0.44, 0.5], TEXTO = [0.1, 0.12, 0.16], LINHA = [0.88, 0.91, 0.95];
+
+    var h = reg.horario, l = reg.localizacao, e = reg.endereco || {}, m = reg.mapa;
+    var y;
+
+    // ---- cabeçalho
+    cor(cP); ret(0, 0, PW, 92);
+    cor(cD); ret(0, 92, PW, 3);
+    cor(cD); rr(M, 21, 50, 50, 12, 'f');
+    pino(M + 25, 46, 30, [0.02, 0.2, 0.18], cD);
+    cor([1, 1, 1]); txt(M + 64, 43, cp1252(T.titulo || 'REGISTRO DE LOCAL E HORA'), 16.5, 'F2');
+    cor([0.73, 0.8, 0.88]);
+    txt(M + 64, 61, cp1252('Tipo: ' + reg.tipo + '  ·  App: ' + reg.appId + '  ·  Página ' + n + ' de ' + total), 8.5, 'F1');
+    // selo de integridade: só diz "verificada" se a verificação feita agora confirmou
+    var selo, lin1, lin2, cSelo;
+    var hoje = new Date();
+    if (v && v.ok) { lin1 = 'INTEGRIDADE'; lin2 = 'verificada em ' + pad(hoje.getDate()) + '/' + pad(hoje.getMonth() + 1) + '/' + hoje.getFullYear(); cSelo = [0.5, 0.94, 0.89]; }
+    else if (v && v.motivo) { lin1 = 'ATENÇÃO'; lin2 = 'integridade não confere'; cSelo = [1, 0.55, 0.55]; }
+    else { lin1 = 'INTEGRIDADE'; lin2 = 'não verificada'; cSelo = [0.73, 0.8, 0.88]; }
+    var sw = 132, sx = PW - M - sw;
+    corTr(cSelo, 1.1); rr(sx, 25, sw, 40, 7, 'S');
+    cor(cSelo); centro(sx, sw, 42, cp1252(lin1), 8.5, 'F2', true); centro(sx, sw, 55, cp1252(lin2), 7.5, 'F1');
+
+    // ---- tabela de dados
+    y = 116;
+    var LX = M + 12, VX = M + 142, VW = CW - 154;
+    function q(t, tam, neg) { return quebrarLinhas(t, tam || 10.5, VW, neg); }
+    var linhas = [];
+    linhas.push(['Data e hora', [{ l: q(formatarData(reg) + ' (' + utcTexto(h.fusoOffsetMin) + ')') }]]);
+    var conf = h.referencia
+      ? 'Conferida na internet (' + h.referencia.fonte + '): diferença de ' + (h.diferencaSeg > 0 ? '+' : '') + String(h.diferencaSeg).replace('.', ',') + ' s em relação ao relógio do aparelho.'
+      : 'Não conferida na internet: a hora é a informada pelo relógio do aparelho.';
+    var bloco = [{ l: q(conf) }];
+    if (h.alertaRelogio) bloco.push({ l: q('ALERTA: relógio do aparelho divergente da hora da internet.'), c: [0.7, 0.1, 0.1] });
+    linhas.push(['Conferência de hora', bloco]);
+    if (e.texto) {
+      linhas.push(['Local (endereço)', [{ l: q(e.texto) },
+        { l: q('Fonte: ' + e.provedor + (e.aproximado ? ' · endereço aproximado' : '') + (e.posterior ? ' · obtido depois do registro' : ''), 8, false), t: 8, c: CINZA2 }]]);
+    } else {
+      linhas.push(['Local (endereço)', [{ l: q('Endereço não obtido (somente coordenadas).') }]]);
+    }
+    linhas.push(['Coordenadas', [{ l: [cp1252(l.latitude.toFixed(6) + ', ' + l.longitude.toFixed(6))] }]]);
+    linhas.push(['Margem de erro', [{ l: q('cerca de ' + String(l.precisaoM).replace('.', ',') + ' m' + (l.precisaoBaixa ? '  —  PRECISÃO BAIXA' : '')), c: l.precisaoBaixa ? [0.7, 0.1, 0.1] : null }]]);
+    var url = linkMapa(reg, 'google');
+    linhas.push(['Mapa (link)', [{ l: quebrarLinhas(url, 8.5, VW, false), t: 8.5, c: [0.1, 0.3, 0.7], link: url }]]);
     if (reg.observacao) {
       var ol = q(reg.observacao);
-      if (ol.length > 8) { ol = ol.slice(0, 8); ol[7] = ol[7].replace(/\s*\S*$/, '') + ' ... (texto cortado no PDF; completo no arquivo JSON)'; }
-      campo('Observação', ol);
+      if (ol.length > 6) { ol = ol.slice(0, 6); ol[5] = ol[5].replace(/\s*\S*$/, '') + ' ... (texto cortado no PDF; completo no arquivo JSON)'; }
+      linhas.push(['Observação', [{ l: ol }]]);
     }
-
-    // imagem do mapa
-    var m = reg.mapa;
-    if (m && m.dataUrl && m.mimeType === 'image/jpeg') {
-      var iw = Math.min(CW, 460), ih = iw * m.altura / m.largura;
-      var disp = PH - 44 - y - 215 - 30;
-      if (ih > disp) { ih = Math.max(disp, 120); iw = ih * m.largura / m.altura; }
-      cor(0.35, 0.4, 0.47); txt(M, y, cp1252('Imagem do mapa'), 8.5, 'F2');
-      y += 8;
-      ops.push('q ' + iw.toFixed(2) + ' 0 0 ' + ih.toFixed(2) + ' ' + M + ' ' + Y(y + ih) + ' cm /Im1 Do Q');
-      ops.push('0.75 0.78 0.82 RG 0.6 w ' + M + ' ' + Y(y + ih) + ' ' + iw.toFixed(2) + ' ' + ih.toFixed(2) + ' re S');
-      y += ih + 11;
-      cor(0.4, 0.44, 0.5);
-      txt(M, y, cp1252(m.atribuicao + ' · zoom ' + m.zoom + (m.posterior ? ' · imagem gerada depois do registro' : '')), 7.5, 'F1');
-      y += 14;
-      imagem = { bytes: bytesDeDataUrl(m.dataUrl), w: m.largura, h: m.altura };
-    } else if (m && m.dataUrl) {
-      campo('Imagem do mapa', q('Imagem em formato PNG não incluída no PDF (consta no arquivo JSON).'), { cinza: true });
-    } else if (m && m.pendente) {
-      campo('Imagem do mapa', q('Não gerada (pendente).'), { cinza: true });
-    }
-
-    // integridade
-    cor(0.8, 0.82, 0.86); ret(M, y, CW, 0.8); y += 14;
-    cor(0.1, 0.12, 0.16); txt(M, y, cp1252('Integridade do registro'), 10, 'F2'); y += 14;
-    function mono(rotulo, valor) {
-      cor(0.35, 0.4, 0.47); txt(M, y, cp1252(rotulo), 7.5, 'F2'); y += 10;
-      cor(0.1, 0.12, 0.16); txt(M, y, cp1252(valor), 8.5, 'F3'); y += 13;
-    }
-    mono('Identificador do registro', reg.id);
-    if (reg.hash && reg.hash.nucleo) {
-      mono('Hash SHA-256 (dados do registro: local, hora, tipo e observação)', reg.hash.nucleo);
-      mono('Hash SHA-256 completo (inclui endereço e imagem do mapa)', reg.hash.completo);
-      if (m && m.sha256) mono('Hash SHA-256 da imagem do mapa', m.sha256);
-      if (reg.hash.completoRecalculadoEm) {
-        cor(0.4, 0.44, 0.5); txt(M, y, cp1252('Hash completo recalculado em ' + reg.hash.completoRecalculadoEm + ' (endereço ou imagem obtidos depois).'), 7.5, 'F1'); y += 12;
-      }
-    } else {
-      mono('Hash', 'indisponível neste registro');
-    }
-    y += 2;
-
-    // avisos
-    var itens = (tx.limitacoes || []).slice(0, 3);
-    var corpo = [];
-    itens.forEach(function (it) { quebrarLinhas(it, 8, CW - 22, false).forEach(function (ln, i) { corpo.push({ ln: ln, ponto: i === 0 }); }); });
-    var hb = 26 + corpo.length * 10.5;
-    if (y + hb < PH - 44) {
-      cor(0.95, 0.96, 0.98); ret(M, y, CW, hb);
-      cor(0.1, 0.12, 0.16); txt(M + 8, y + 15, cp1252('Observações importantes'), 8.5, 'F2');
-      cor(0.25, 0.28, 0.33);
-      corpo.forEach(function (c, i) {
-        if (c.ponto) txt(M + 8, y + 28 + i * 10.5, cp1252('•'), 8, 'F1');
-        txt(M + 18, y + 28 + i * 10.5, c.ln, 8, 'F1');
+    var tTopo = y;
+    linhas.forEach(function (ln, i) {
+      var cont = 0;
+      ln[1].forEach(function (b) { cont += b.l.length * ((b.t || 10.5) + 3.5); });
+      var alt = cont + 10;
+      cor(i % 2 === 0 ? [0.953, 0.965, 0.984] : [1, 1, 1]); ret(M, y, CW, alt);
+      cor(CINZA); txt(LX, y + 13, cp1252(ln[0]).toUpperCase(), 7.5, 'F2');
+      var yy = y + 13;
+      ln[1].forEach(function (b) {
+        var tam = b.t || 10.5;
+        b.l.forEach(function (t) {
+          cor(b.c || TEXTO); txt(VX, yy, t, tam, 'F1');
+          if (b.link) links.push({ x1: VX, y1: PH - (yy + 3), x2: VX + largTxt(t, tam, false), y2: PH - (yy - tam), uri: b.link });
+          yy += tam + 3.5;
+        });
       });
-      y += hb;
+      y += alt;
+    });
+    corTr(LINHA, 0.8); rr(M, tTopo, CW, y - tTopo, 6, 'S');
+    y += 16;
+
+    // ---- mapa + QR code
+    var QB = 108, GAP = 14;
+    var matriz = (T.qrCode === false) ? null : qrMatriz(url);
+    function desenhaQr(x, yTop) {
+      corTr(LINHA, 0.8); rr(x, yTop, QB, QB, 8, 'S');
+      var mod = (QB - 20) / (matriz.length), partes = [];
+      matriz.forEach(function (lin, r) { lin.forEach(function (d, c) {
+        if (d) partes.push(f2(x + 10 + c * mod) + ' ' + Y(yTop + 10 + (r + 1) * mod) + ' ' + f2(mod + 0.05) + ' ' + f2(mod + 0.05) + ' re');
+      }); });
+      cor(cP); ops.push(partes.join(' ') + ' f');
+    }
+    function legendaQr(x, yTop, w) {
+      cor(CINZA2);
+      quebrarLinhas('Aponte a câmera para abrir o local no mapa', 7.5, w, false).forEach(function (t, i) { centro(x, w, yTop + 12 + i * 9, t, 7.5, 'F1'); });
+    }
+    var reserva = 215;                       // espaço para integridade, avisos e rodapé
+    if (m && m.dataUrl && m.mimeType === 'image/jpeg') {
+      var mw = matriz ? CW - QB - GAP : Math.min(CW, 460), mh = mw * m.altura / m.largura;
+      var disp = PH - 44 - y - reserva - 18;
+      if (mh > disp) { mh = Math.max(disp, 110); mw = mh * m.largura / m.altura; }
+      ops.push('q ' + f2(mw) + ' 0 0 ' + f2(mh) + ' ' + M + ' ' + Y(y + mh) + ' cm /Im1 Do Q');
+      corTr([0.78, 0.82, 0.87], 0.8); ops.push(f2(M) + ' ' + Y(y + mh) + ' ' + f2(mw) + ' ' + f2(mh) + ' re S');
+      cor(CINZA2); txt(M, y + mh + 11, cp1252(m.atribuicao + ' · zoom ' + m.zoom + (m.posterior ? ' · imagem gerada depois do registro' : '')), 7, 'F1');
+      if (matriz) { var qx = M + mw + GAP; desenhaQr(qx, y); legendaQr(qx, y + QB, QB); }
+      imagem = { bytes: bytesDeDataUrl(m.dataUrl), w: m.largura, h: m.altura };
+      y += mh + 26;
+    } else {
+      if (matriz) {
+        desenhaQr(M, y);
+        cor(TEXTO); txt(M + QB + GAP, y + 20, cp1252('Imagem do mapa'), 8.5, 'F2');
+        cor(CINZA2);
+        var msg = (m && m.dataUrl) ? 'Imagem em formato PNG não incluída no PDF (consta no arquivo JSON).' : (m && m.pendente ? 'Imagem do mapa ainda não gerada (pendente).' : 'Imagem do mapa não incluída neste registro.');
+        quebrarLinhas(msg + ' Aponte a câmera para o QR code para abrir o local no mapa.', 8.5, CW - QB - GAP, false).forEach(function (t, i) { txt(M + QB + GAP, y + 36 + i * 12, t, 8.5, 'F1'); });
+        y += QB + 14;
+      } else if (m && m.dataUrl) {
+        cor(CINZA2); txt(M, y + 8, cp1252('Imagem do mapa em formato PNG não incluída no PDF (consta no arquivo JSON).'), 8.5, 'F1'); y += 22;
+      }
     }
 
-    // rodapé
-    cor(0.8, 0.82, 0.86); ret(M, PH - 36, CW, 0.6);
-    cor(0.4, 0.44, 0.5);
-    txt(M, PH - 24, cp1252('© 2026 Felippe Alvarez · GeoRegistro v' + VERSAO + ' · PDF gerado em ' + new Date().toLocaleString('pt-BR')), 7.5, 'F1');
+    // ---- integridade
+    var itens = [['Identificador do registro', reg.id]];
+    if (reg.hash && reg.hash.nucleo) {
+      itens.push(['Hash SHA-256 (dados do registro: local, hora, tipo e observação)', reg.hash.nucleo]);
+      itens.push(['Hash SHA-256 completo (inclui endereço e imagem do mapa)', reg.hash.completo]);
+      if (m && m.sha256) itens.push(['Hash SHA-256 da imagem do mapa', m.sha256]);
+    } else itens.push(['Hash', 'indisponível neste registro']);
+    var nota = (reg.hash && reg.hash.completoRecalculadoEm) ? 'Hash completo recalculado em ' + reg.hash.completoRecalculadoEm + ' (endereço ou imagem obtidos depois).' : '';
+    var hi = 30 + itens.length * 23 + (nota ? 11 : 0);
+    cor([0.973, 0.98, 0.988]); rr(M, y, CW, hi, 8, 'f'); corTr(LINHA, 0.8); rr(M, y, CW, hi, 8, 'S');
+    cor(cD); rr(M + 12, y + 12, 9, 9, 2.5, 'f');
+    cor(cP); txt(M + 27, y + 20, cp1252('Integridade do registro'), 9.5, 'F2');
+    var iy = y + 36;
+    itens.forEach(function (it) {
+      cor(CINZA); txt(M + 12, iy, cp1252(it[0]).toUpperCase(), 6.5, 'F2');
+      cor(TEXTO); txt(M + 12, iy + 10, cp1252(it[1]), 8, 'F3');
+      iy += 23;
+    });
+    if (nota) { cor(CINZA2); txt(M + 12, iy - 4, cp1252(nota), 7, 'F1'); }
+    y += hi + 12;
+
+    // ---- avisos
+    var corpo = [];
+    (tx.limitacoes || []).slice(0, 2).forEach(function (it) { quebrarLinhas(it, 7.5, CW - 34, false).forEach(function (ln, i) { corpo.push({ ln: ln, ponto: i === 0 }); }); });
+    var hb = 28 + corpo.length * 10;
+    if (y + hb < PH - 44) {
+      cor([1, 0.973, 0.9]); rr(M, y, CW, hb, 6, 'f');
+      cor([0.96, 0.7, 0.0]); ret(M, y, 3.5, hb);
+      cor(TEXTO); txt(M + 14, y + 16, cp1252('Importante'), 8.5, 'F2');
+      cor([0.25, 0.28, 0.33]);
+      corpo.forEach(function (c, i) {
+        if (c.ponto) txt(M + 14, y + 28 + i * 10, cp1252('•'), 7.5, 'F1');
+        txt(M + 23, y + 28 + i * 10, c.ln, 7.5, 'F1');
+      });
+    }
+
+    // ---- rodapé
+    cor(LINHA); ret(M, PH - 36, CW, 0.6);
+    cor(CINZA2);
+    txt(M, PH - 24, cp1252((T.rodape || '© 2026 Felippe Alvarez') + ' · GeoRegistro v' + VERSAO + ' · PDF gerado em ' + new Date().toLocaleString('pt-BR')), 7.5, 'F1');
     var pg2 = cp1252(n + '/' + total);
     txt(PW - M - largTxt(pg2, 7.5, false), PH - 24, pg2, 7.5, 'F1');
 
     return { conteudo: ops.join('\n'), imagem: imagem, links: links };
   }
 
-  function montarPdf(regs) {
+  function montarPdf(regs, verifs) {
     var objs = [];
     function def(id, partes) { objs[id - 1] = partes; }
     function seq(strOuBytes) { return strOuBytes; }
@@ -1375,7 +1628,7 @@
     def(6, ['<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>']);
 
     regs.forEach(function (reg, i) {
-      var pg = paginaPdf(reg, i + 1, total);
+      var pg = paginaPdf(reg, i + 1, total, verifs ? verifs[i] : null);
       var idImg = null, idCont, idPag, annots = [];
       if (pg.imagem) {
         idImg = proximo++;
@@ -1427,8 +1680,10 @@
     if (!lista.length || lista.some(function (r) { return !r || !r.localizacao || !r.horario; })) {
       return Promise.reject(erro('REGISTRO_INVALIDO', 'Registro inválido.'));
     }
-    try { return Promise.resolve(montarPdf(lista)); }
-    catch (e) { return Promise.reject(erro('PDF_FALHOU', 'Não foi possível gerar o PDF.')); }
+    return Promise.all(lista.map(function (r) { return verificarIntegridade(r).catch(function () { return null; }); })).then(function (vs) {
+      try { return montarPdf(lista, vs); }
+      catch (e) { throw erro('PDF_FALHOU', 'Não foi possível gerar o PDF.'); }
+    });
   }
 
   function nomePdf(regs) {
@@ -1510,7 +1765,7 @@
       'Confira o endereço e a hora, escreva uma observação se quiser e toque em "Salvar".',
       'Os registros ficam guardados neste aparelho, neste navegador. Se você limpar os dados do navegador, eles são apagados: exporte uma cópia de vez em quando.',
       'O endereço é obtido na internet. Sem internet, o registro é salvo só com as coordenadas e o endereço pode ser completado depois.',
-      'Para guardar ou enviar um registro, use o PDF: ele reúne data e hora, endereço, coordenadas, margem de erro, mapa (quando houver), hashes e avisos. O arquivo JSON continua sendo a cópia completa dos dados.',
+      'Para guardar ou enviar um registro, use o PDF: ele reúne data e hora, endereço, coordenadas, margem de erro, mapa (quando houver), hashes e avisos. O PDF traz um QR code que abre o local no mapa e um selo de integridade, que só aparece como "verificada" se a verificação feita no momento de gerar o PDF confirmar que o registro não foi alterado. O arquivo JSON continua sendo a cópia completa dos dados.',
       'Se o app estiver com a imagem de mapa ligada, o registro também guarda um mapa com o ponto marcado e um círculo que mostra a margem de erro do GPS. Sem internet, a imagem fica pendente e é feita depois.'
     ],
     limitacoes: [
@@ -1563,6 +1818,19 @@
 <script>
 (function () {
   'use strict';
+  var ICO = {
+    pin: '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.6"/>',
+    dl: '<path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/>',
+    sh: '<circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><path d="M8.2 10.9l7.1-3.7M8.2 13.1l7.1 3.7"/>',
+    ck: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    clk: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    gl: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.7 5.4 3.7 8.5s-1.2 5.9-3.7 8.5c-2.5-2.6-3.7-5.4-3.7-8.5S9.5 6.1 12 3.5z"/>',
+    dc: '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M9.5 12h5M9.5 15.5h5"/>'
+  };
+  function ico(n, s) {
+    return '<svg width="' + (s || 18) + '" height="' + (s || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICO[n] + '</svg>';
+  }
+  document.querySelectorAll('[data-ico]').forEach(function (el) { el.insertAdjacentHTML('afterbegin', ico(el.getAttribute('data-ico'), +el.getAttribute('data-s') || 18)); });
   GeoRegistro.configurar({ appId: 'teste-geo-registro' });
 
   var $ = function (id) { return document.getElementById(id); };
@@ -1623,6 +1891,12 @@
     linhas.push(['Tentativas de endereço', e.tentativas.map(function (t) {
       return esc(t.provedor) + (t.ok ? ' ✔' : ' ✘ ' + esc(t.erro || ''));
     }).join(' · ') || '—']);
+    var hm = /T(\d{2}:\d{2}):(\d{2})/.exec(h.dispositivoISO) || [];
+    var dtx = new Date(h.dispositivoEpochMs).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    $('destaque').innerHTML = '<div class="hora">' + esc(hm[1] || '') + '<small> :' + esc(hm[2] || '') + '</small></div><div class="data">' + esc(dtx) + '</div>' +
+      '<div class="chips"><span class="chip ' + (l.precisaoBaixa ? 'bad' : 'ok') + '">' + ico('ck', 14) + ' ±' + esc(l.precisaoM) + ' m' + (l.precisaoBaixa ? ' · precisão baixa' : '') + '</span>' +
+      (h.referencia ? '<span class="chip ' + (h.alertaRelogio ? 'bad' : 'info') + '">' + ico('clk', 14) + (h.alertaRelogio ? ' Relógio divergente' : ' Hora conferida na internet') + '</span>' : '<span class="chip bad">' + ico('clk', 14) + ' Hora não conferida</span>') +
+      (e.texto ? '<span class="chip">' + ico('gl', 14) + ' ' + esc(e.provedor) + '</span>' : '<span class="chip bad">Endereço pendente</span>') + '</div>';
     $('dados').innerHTML = linhas.map(function (x) { return '<dt>' + x[0] + '</dt><dd>' + x[1] + '</dd>'; }).join('');
     $('resultado').hidden = false;
   }
@@ -1632,11 +1906,12 @@
     rascunho = null; salvoAtual = null; $('obs').readOnly = false; msgR('');
     $('resultado').hidden = true;
     $('btnRegistrar').disabled = true;
+    $('radar').hidden = false; $('barraWrap').hidden = false; $('barra').style.width = '4%';
     msgStatus('Solicitando localização…');
     GeoRegistro.capturar({
       tipo: $('tipo').value,
       onStatus: function (s) {
-        if (s.etapa === 'localizando') msgStatus('Localizando… margem de erro atual: ' + s.precisaoM + ' m');
+        if (s.etapa === 'localizando') { msgStatus('Localizando… margem de erro atual: ' + s.precisaoM + ' m'); $('barra').style.width = Math.max(6, Math.min(100, (Number($('limite').value) || 25) / s.precisaoM * 100)) + '%'; }
         else if (s.etapa === 'obtendo_endereco_e_hora') msgStatus('Posição obtida (±' + s.precisaoM + ' m). Buscando endereço e conferindo a hora…');
       }
     }).then(function (r) {
@@ -1647,7 +1922,7 @@
       mostrarRascunho(r);
     }).catch(function (e) {
       msgStatus(e.message || 'Falha ao registrar.', true);
-    }).then(function () { $('btnRegistrar').disabled = false; });
+    }).then(function () { $('btnRegistrar').disabled = false; $('radar').hidden = true; $('barraWrap').hidden = true; });
   }
 
   function salvar() {
@@ -1671,8 +1946,8 @@
           '<button class="sec" data-acao="copiar">Copiar resumo</button>' +
           '<button class="sec" data-acao="baixar">Baixar imagem</button>' +
           '<button class="sec" data-acao="compartilhar">Compartilhar</button>' +
-          '<button class="sec" data-acao="pdf">Baixar PDF</button>' +
-          '<button class="sec" data-acao="compartilharpdf">Compartilhar PDF</button>' +
+          '<button class="sec" data-acao="pdf">' + ico('dl', 16) + ' Baixar PDF</button>' +
+          '<button class="sec" data-acao="compartilharpdf">' + ico('sh', 16) + ' Compartilhar PDF</button>' +
           '<button class="sec" data-acao="verificar">Verificar integridade</button>' +
           '<button class="perigo" data-acao="excluir">Excluir</button>' +
           '<span class="status" data-res></span></div></div>';
